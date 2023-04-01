@@ -1,0 +1,39 @@
+{
+  "name": "txjson-vscode-ext",
+  "version": "1.0.0",
+  "license": "MIT",
+  "engines": {
+    "vscode": "0.10.x"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "txjson",
+        "aliases": [
+          "TxJSON",
+          "txjson"
+        ],
+        "extensions": [
+          ".txjson"
+        ],
+        "filenames": [
+        ],
+        "mimetypes": [
+          "application/txjson"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "txjson",
+        "scopeName": "source.txjson",
+        "path": "./syntaxes/TxJSON.tmLanguage.json"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode.git"
+  }
+}

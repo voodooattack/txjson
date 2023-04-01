@@ -1,0 +1,3 @@
+spec:
+  tests/**/*.spec.ts
+require: node_modules/ts-node/register

@@ -1,0 +1,238 @@
+{
+	"scopeName": "source.txjson",
+	"fileTypes": ["txjson"],
+	"name": "TxJSON",
+	"patterns": [
+		{ "include": "#comments" },
+		{ "include": "#value" },
+		{ "include": "#typedValue" }
+	],
+	"repository": {
+    "callSite": {
+			"begin": "\\.{3}\\s*\\(",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.call.begin.txjson" }
+			},
+			"end": "\\)",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.call.end.txjson" }
+			},
+      "name": "meta.structure.call.txjson",
+			"patterns": [
+				{ "include": "#comments" },
+				{ "patterns": [{"include": "#value"}, {"include": "#typedValue"}] },
+				{
+					"match": ",",
+					"name": "punctuation.separator.array.txjson"
+				},
+				{
+					"match": "[^\\s\\]]",
+					"name": "invalid.illegal.expected-array-separator.txjson"
+				}
+			]
+    },
+		"array": {
+			"begin": "\\[",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.array.begin.txjson" }
+			},
+			"end": "\\]",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.array.end.txjson" }
+			},
+			"name": "meta.structure.array.txjson",
+			"patterns": [
+				{ "include": "#comments" },
+				{ "patterns": [{"include": "#value"}, {"include": "#typedValue"}] },
+				{
+					"match": ",",
+					"name": "punctuation.separator.array.txjson"
+				},
+				{
+					"match": "[^\\s\\]]",
+					"name": "invalid.illegal.expected-array-separator.txjson"
+				}
+			]
+		},
+		"constant": {
+			"match": "\\b(?:true|false|null|Infinity|NaN)\\b",
+			"name": "constant.language.txjson"
+		},
+		"infinity": {
+			"match": "(-)*\\b(?:Infinity|NaN)\\b",
+			"name": "constant.language.txjson"
+		},
+		"number": {
+			"patterns": [
+				{
+					"comment": "handles hexadecimal numbers",
+					"match": "(0x)[0-9a-fA-f]*",
+					"name": "constant.hex.numeric.txjson"
+				},
+				{
+					"comment": "handles integer and decimal numbers",
+					"match": "[+-.]?(?=[1-9]|0(?!\\d))\\d+(\\.\\d+)?([eE][+-]?\\d+)?",
+					"name": "constant.dec.numeric.txjson"
+				}
+			]
+		},
+		"object": {
+			"begin": "\\{",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.dictionary.begin.txjson" }
+			},
+			"comment": "a txjson object",
+			"end": "\\}",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.dictionary.end.txjson" }
+			},
+			"name": "meta.structure.dictionary.txjson",
+			"patterns": [
+				{ "include": "#comments" },
+				{
+					"comment": "the txjson object key",
+					"include": "#key"
+				},
+				{
+					"begin": ":",
+					"beginCaptures": {
+						"0": { "name": "punctuation.separator.dictionary.key-value.txjson" }
+					},
+					"end": "(,)|(?=\\})",
+					"endCaptures": {
+						"1": { "name": "punctuation.separator.dictionary.pair.txjson" }
+					},
+					"name": "meta.structure.dictionary.value.txjson",
+					"patterns": [
+						{
+							"comment": "the txjson object value",
+							"include": "#value"
+						},
+            {
+							"comment": "the txjson object value",
+							"include": "#typedValue"
+						},
+						{
+							"match": "[^\\s,]",
+							"name": "invalid.illegal.expected-dictionary-separator.txjson"
+						}
+					]
+				},
+				{
+					"match": "[^\\s\\}]",
+					"name": "invalid.illegal.expected-dictionary-separator.txjson"
+				}
+			]
+		},
+		"stringSingle": {
+			"begin": "[']",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.string.begin.txjson" }
+			},
+			"end": "[']",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.string.end.txjson" }
+			},
+			"name": "string.quoted.txjson",
+			"patterns": [
+				{
+					"match": "(?x:                # turn on extended mode\n                     \\\\                # a literal backslash\n                     (?:               # ...followed by...\n                       [\"\\\\/bfnrt]     # one of these characters\n                       |               # ...or...\n                       u               # a u\n                       [0-9a-fA-F]{4}  # and four hex digits\n                     )\n                   )",
+					"name": "constant.character.escape.txjson"
+				},
+				{
+					"match": "\\\\.",
+					"name": "invalid.illegal.unrecognized-string-escape.txjson"
+				}
+			]
+		},
+		"stringDouble": {
+			"begin": "[\"]",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.string.begin.txjson" }
+			},
+			"end": "[\"]",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.string.end.txjson" }
+			},
+			"name": "string.quoted.txjson",
+			"patterns": [
+				{
+					"match": "(?x:                # turn on extended mode\n                     \\\\                # a literal backslash\n                     (?:               # ...followed by...\n                       [\"\\\\/bfnrt]     # one of these characters\n                       |               # ...or...\n                       u               # a u\n                       [0-9a-fA-F]{4}  # and four hex digits\n                     )\n                   )",
+					"name": "constant.character.escape.txjson"
+				},
+				{
+					"match": "\\\\.",
+					"name": "invalid.illegal.unrecognized-string-escape.txjson"
+				}
+			]
+		},
+		"key": {
+			"name": "string.key.txjson",
+			"patterns": [
+				{ "include": "#stringSingle" },
+				{ "include": "#stringDouble" },
+				{
+					"match": "[a-zA-Z0-9_-]",
+					"name": "string.key.txjson"
+				}
+			]
+		},
+    "ident": {
+			"name": "ident.txjson",
+			"patterns": [
+				{
+					"match": "[a-zA-Z_$][a-zA-Z0-9_$]*",
+					"name": "ident.txjson"
+				}
+			]
+		},
+		"value": {
+			"comment": "the 'value' diagram at http://json.org",
+			"patterns": [
+				{ "include": "#constant" },
+				{ "include": "#infinity" },
+				{ "include": "#number" },
+				{ "include": "#stringSingle" },
+				{ "include": "#stringDouble" },
+				{ "include": "#array" },
+				{ "include": "#object" }
+			]
+		},
+		"typedValue": {
+			"comment": "the typed value",
+      "begin": "[a-zA-Z_$][a-zA-Z0-9_$]*",
+      "beginCaptures": {
+        "0": { "name": "value.typed.begin.txjson"  }
+      },
+			"patterns": [
+				{ "include": "#comments" },
+				{ "include": "#ident" },
+				{ "include": "#value" }
+			]
+		},
+		"comments": {
+			"patterns": [
+				{
+					"match": "/{2}.*",
+					"name": "comment.single.txjson"
+				},
+				{
+					"begin": "/\\*\\*(?!/)",
+					"captures": {
+						"0": { "name": "punctuation.definition.comment.txjson" }
+					},
+					"end": "\\*/",
+					"name": "comment.block.documentation.txjson"
+				},
+				{
+					"begin": "/\\*",
+					"captures": {
+						"0": { "name": "punctuation.definition.comment.txjson" }
+					},
+					"end": "\\*/",
+					"name": "comment.block.txjson"
+				}
+			]
+		}
+	}
+}
