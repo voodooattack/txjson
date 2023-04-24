@@ -1,6 +1,6 @@
 {
   "name": "txjson",
-  "version": "1.0.1",
+  "version": "1.0.1-1",
   "description": "An extension of JSON5 with rich inline type information.",
   "author": {
     "name": "Abdullah Ali",
@@ -17,9 +17,9 @@
   "types": "./dist/dts/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/dts/",
-      "import": "./dist/esm/",
-      "require": "./dist/cjs/"
+      "types": "./dist/dts/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
     },
     "./*": {
       "types": "./dist/dts/*.d.ts",
