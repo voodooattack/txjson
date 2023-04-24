@@ -36,11 +36,13 @@ export class ValueError extends Error {
   }
   get message() {
     if (this.simple) {
-      return `${getLoc(this.acc, true)}: ${this.msg}`;
+      return `${getLoc(this.acc, true)}: in expression \`${indent(getExpression(
+        this.acc,
+      ), 0)}\`: ${this.msg}`;
     }
-    return `${getLoc(this.acc)}: error in expression \`${getExpression(
+    return `${getLoc(this.acc)}: error in expression \`${indent(getExpression(
       this.acc,
-    )}\`: ${this.msg}`;
+    ), 0)}\`: ${this.msg}`;
   }
 }
 
@@ -54,8 +56,8 @@ export function safeObjectFromEntries<T extends object = object>(
   );
 }
 
-export function reindent(str: string, level: number = 0) {
-  return str.replace(/\n/g, '\n' + '  '.repeat(level));
+export function indent(str: string, level: number = 0, reindent?: boolean) {
+  return str.replace(reindent ? /\n\s*/g : /\n/g, '\n' + '  '.repeat(level));
 }
 
 export function isValidIdent(str: string) {

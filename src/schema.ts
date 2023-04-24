@@ -3,7 +3,7 @@ import type {TxJSONParser} from './parser/TxJSONParser';
 import {
   ValueError,
   isValidIdent,
-  reindent,
+  indent,
   safeObjectFromEntries,
 } from './util';
 
@@ -138,9 +138,10 @@ function createSignatureValidator(
       )
         .map(
           ([k, e]) =>
-            `* in argument ${k} with signature ${JSON.stringify(
+            `* in argument ${k} with signature \`${indent(
               signatures[parseInt(k)],
-            )}: ${reindent(e.message, 2)}`,
+              1,
+            )}\`: ${indent(e.message, 2)}`,
         )
         .join('\n  ')}`,
     );
@@ -383,7 +384,7 @@ export namespace Schema {
       const typeName = this.type.replace(/^:/, '');
       return `${
         isValidIdent(typeName) ? typeName : JSON.stringify(typeName)
-      }(${JSON.stringify(this.value)})`;
+      } ${JSON.stringify(this.value)}`;
     }
     get deserializer(): Deserializer | undefined {
       return this.baseSchema.deserializers[this.type];
@@ -407,7 +408,7 @@ export namespace Schema {
     get signature() {
       return `${this.inner!.signature}?`;
     }
-    get deserializer(): Deserializer {
+    get deserializer(): Deserializer | undefined {
       return function(acc) {
         const child = acc.children[0];
         if (
@@ -474,21 +475,34 @@ export namespace Schema {
   }
 
   export class TObject extends Type {
-    fields: Record<string, Type>;
-    constructor(baseSchema: Schema, fields: Record<string, Type>) {
+    fields: Record<string, Type> | null;
+    constructor(baseSchema: Schema, fields: Type | Record<string, Type>) {
       super(baseSchema);
-      this.fields = Object.assign(Object.create(null), fields);
+      if (fields instanceof Type) {
+        this.fields = null;
+      } else {
+        this.fields = Object.assign(Object.create(null), fields);
+      }
     }
     get signature(): string {
+      if (this.fields === null) return 'object';
       const fields = Object.keys(this.fields).map(
-        (k) => `  ${JSON.stringify(k)}: ${this.fields[k].signature},`,
+        (k) => `  ${JSON.stringify(k)}: ${this.fields![k].signature},`,
       );
       return `object {\n${fields.join('\n')}\n}`;
     }
     get validator(): Validator {
       const {baseSchema, signature, fields} = this;
+      if (fields === null) {
+        return function(acc) {
+          const obj = acc.typeName === ':object' ? acc : acc.children[0];
+          if (!obj || obj.typeName !== ':object') {
+            return new ValueError(acc, `expected object`);
+          }
+        };
+      }
       const validators = safeObjectFromEntries(
-        Object.entries(this.fields).map(([k, v]) => [
+        Object.entries(fields).map(([k, v]) => [
           k,
           [v instanceof Maybe, v?.validator],
         ]),
@@ -498,7 +512,7 @@ export namespace Schema {
         if (!obj || obj.typeName !== ':object') {
           return new ValueError(
             acc,
-            `expected object with signature \`${signature}\``,
+            `expected object with signature \`${indent(signature, 1)}\``,
           );
         }
         const errors: Record<string, Error> = Object.create(null);
@@ -534,13 +548,13 @@ export namespace Schema {
         if (Object.keys(errors).length) {
           return new ValueError(
             acc,
-            `expected object with signature \`${reindent(
+            `expected object with signature \`${indent(
               signature,
               1,
             )}\`\nvalidation failed with errors:\n  ${Object.entries(errors)
               .map(
                 ([k, e]) =>
-                  `* in field ${JSON.stringify(k)}: ${reindent(e.message, 2)}`,
+                  `* in field ${JSON.stringify(k)}: ${indent(e.message, 3)}`,
               )
               .join('\n  ')}`,
           );
@@ -551,21 +565,28 @@ export namespace Schema {
   }
 
   export class OneOf extends Type {
-    constructor(baseSchema: Schema, public types: Type[]) {
+    constructor(
+      baseSchema: Schema,
+      public types: Type[],
+      public namespace?: string,
+    ) {
       super(baseSchema);
     }
     get signature() {
       return this.types
         .map((t) =>
-          !isValidIdent(t.signature) && !(t instanceof Literal) ?
+          !isValidIdent(t.signature) && (t instanceof Alias || t instanceof Terminal) ?
             `(${t.signature})` :
             t.signature,
         )
-        .join('|');
+        .join(' | ');
     }
     get deserializer(): Deserializer {
       const children = this.types.map((t) => [t.validator, t.deserializer]);
       const {signature} = this;
+      if (this.namespace && this.namespace in this.baseSchema.deserializers) {
+        return this.baseSchema.deserializers[this.namespace]!;
+      }
       return function(acc) {
         const child = acc.children[0];
         const errors: Error[] = [];
@@ -613,15 +634,17 @@ export namespace Schema {
         }
         return new ValueError(
           acc,
-          `expected: \`${signature}\`, validation failed with errors:\n${Object.entries(
-            errors,
-          )
+          `expected: \`${indent(
+            signature,
+            1,
+          )}\`, validation failed with errors:\n${Object.entries(errors)
             .flatMap(([k, errs]) =>
               errs.map(
                 (e) =>
-                  `  * alternative ${JSON.stringify(
+                  `  * alternative \`${indent(
                     k,
-                  )} failed with error: ${reindent(e.message, 2)}`,
+                    2,
+                  )}\` failed with error: ${indent(e.message, 2)}`,
               ),
             )
             .join('\n')}`,
@@ -651,6 +674,9 @@ export namespace Schema {
       );
       return function(acc) {
         const arr = acc.typeName === ':array' ? acc : acc.children[0];
+        if (arr.typeName !== ':array') {
+          /* return */ new ValueError(acc, 'invalid array');
+        }
         const errors: Record<number, Error> = Object.create(null);
         let i = 0;
         for (const [optional, validator] of validators) {
@@ -658,15 +684,13 @@ export namespace Schema {
             const e = validator?.(arr.children[i]);
             if (e) {
               if (e instanceof ValueError) e.simple = true;
-              errors[i] = new ValueError(
-                acc,
-                `expected ${label} with signature ${signature}, schema validation failed in index #${i} with error: ${e.message}`,
-              );
+              errors[i] = e;
             }
           } else if (!optional) {
             errors[i] = new ValueError(
               acc,
               `missing index ${i} of type: \`${types[i].signature}\``,
+              true,
             );
           }
           i++;
@@ -675,6 +699,7 @@ export namespace Schema {
           errors[j] = new ValueError(
             arr.children[j],
             `${label} length mismatch`,
+            true,
           );
         }
         if (!Object.keys(errors).length) {
@@ -682,10 +707,11 @@ export namespace Schema {
         }
         return new ValueError(
           acc,
-          `expected ${label} with signature \`${signature}\`\nvalidation failed with errors:\n  ${Object.entries(
-            errors,
-          )
-            .map(([k, e]) => `* at index ${k}: ${reindent(e.message, 2)}`)
+          `expected ${label} with signature \`${indent(
+            signature,
+            1,
+          )}\`\nvalidation failed with errors:\n  ${Object.entries(errors)
+            .map(([k, e]) => `* at index ${k}: ${indent(e.message, 2)}`)
             .join('\n  ')}`,
         );
       };
@@ -727,7 +753,10 @@ export namespace Schema {
       return this.to;
     }
     get deserializer(): Deserializer | undefined {
-      return this.baseSchema.deserializers[this.to];
+      return (
+        this.baseSchema.deserializers[this.from] ??
+        this.baseSchema.deserializers[this.to]
+      );
     }
     get validator(): Validator {
       const self = this;
@@ -739,7 +768,11 @@ export namespace Schema {
             `missing aliased type ${JSON.stringify(self.to)}`,
           );
         }
-        return v(acc);
+        return v(
+          acc.typeName.startsWith(':') || acc.typeName === self.to ?
+            acc :
+            acc.children[0],
+        );
       };
     }
   }
@@ -856,11 +889,8 @@ const schemaValidators = function(baseSchema: Schema): Schema['validators'] {
           );
         }
       }
-      if (getParentNamespace(acc)?.startsWith(':')) {
-        return new ValueError(
-          acc.parent!,
-          'invalid class name',
-        );
+      if (getNamespace(acc)?.startsWith(':')) {
+        return new ValueError(acc.parent!, 'invalid class name');
       }
       return acc.children[0].typeName === ':array' ||
         acc.children[0].typeName === ':undefined' ?
@@ -893,11 +923,8 @@ const schemaValidators = function(baseSchema: Schema): Schema['validators'] {
           );
         }
       }
-      if (getParentNamespace(acc)?.startsWith(':')) {
-        return new ValueError(
-          acc.parent!,
-          'invalid class name',
-        );
+      if (getNamespace(acc)?.startsWith(':')) {
+        return new ValueError(acc.parent!, 'invalid class name');
       }
       return acc.children[0].typeName === ':object' ||
         acc.children[0].typeName === ':undefined' ?
@@ -1034,7 +1061,7 @@ export function createSchemaOfSchema(
         'object': (acc) => new Schema.TObject(baseSchema, acc.children[0].value),
         'proto': (acc) => new Schema.TObject(baseSchema, acc.children[0].value),
         'class': (acc) => {
-          const className = getParentNamespace(acc)!;
+          const className = getNamespace(acc)!;
           const [args] = acc.children;
           return new Schema.Class(
             baseSchema,
@@ -1045,7 +1072,8 @@ export function createSchemaOfSchema(
           );
         },
         'maybe': (a) => new Schema.Maybe(baseSchema, a.children[0].value),
-        'oneOf': (a) => new Schema.OneOf(baseSchema, a.children[0].value),
+        'oneOf': (a) =>
+          new Schema.OneOf(baseSchema, a.children[0].value, getNamespace(a)),
         'arrayOf': (acc) => {
           return Array.isArray(acc.children[0].value) ?
             new Schema.ArrayFixed(baseSchema, acc.children[0].value) :
@@ -1057,9 +1085,9 @@ export function createSchemaOfSchema(
             new Schema.Alias(
               acc.schema,
               baseSchema,
-                acc.parent?.key!,
-                acc.typeName,
-                acc.children[0].value,
+              getNamespace(acc)!,
+              acc.typeName,
+              acc.children[0].value,
             );
         },
       } as Schema['deserializers'],
@@ -1067,7 +1095,7 @@ export function createSchemaOfSchema(
   });
 }
 
-function getParentNamespace(acc: RawAccessor) {
+function getNamespace(acc: RawAccessor) {
   let current: RawAccessor | undefined = acc;
   let lastPair: RawAccessor | undefined = undefined;
   while (current && current.typeName !== ':root') {

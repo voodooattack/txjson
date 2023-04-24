@@ -1,6 +1,6 @@
 {
   "name": "txjson",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "An extension of JSON5 with rich inline type information.",
   "author": {
     "name": "Abdullah Ali",
@@ -14,11 +14,12 @@
   "license": "MIT",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
+  "types": "./dist/dts/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/dts/index.d.ts",
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
+      "types": "./dist/dts/",
+      "import": "./dist/esm/",
+      "require": "./dist/cjs/"
     },
     "./*": {
       "types": "./dist/dts/*.d.ts",
@@ -27,7 +28,9 @@
     }
   },
   "files": [
-    "./dist"
+    "./dist",
+    "LICENSE",
+    "README.md"
   ],
   "scripts": {
     "prepare": "nr build",

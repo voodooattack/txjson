@@ -109,14 +109,14 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
     expect(() =>
       parse(`D {a: "invalid", b: "aaa", c: 1 }`, schema, '/src/aaa/test.txjson'),
     ).to.throw(
-      '/src/aaa/test.txjson(1,0): error in expression `D {a: "invalid", b: "aaa", c: 1 }`: expected object with signature `object {\n    "a": X,\n    "b": string,\n    "c": undefined,\n  }`',
+      '/src/aaa/test.txjson(1,2): error in expression `{a: "invalid", b: "aaa", c: 1 }`: expected object with signature `object {\n    "a": X,\n    "b": string,\n    "c": undefined,\n  }`\nvalidation failed with errors:\n  * in field "a": (1,6): in expression `"invalid"`: expected: `bigint | number`, validation failed with errors:\n        * alternative `bigint` failed with error: (1,6): in expression `"invalid"`: invalid bigint\n        * alternative `number` failed with error: (1,3): in expression `a: "invalid"`: expected "number", found "string"\n  * in field "c": (1,27): in expression `c: 1`: expected "undefined", found "number"',
     );
     expect(() => parse(`X YYY`, schema)).to.throw('unknown type "YYY"');
     expect(() => parse(`Test(1, "2", 3)`, schema)).to.throw(
       'expected arguments with signature `[int, string]`',
     );
     expect(() => parse(`Dummy(1, "2", 3)`, schema)).to.throw(
-      'expected: `(class Dummy)|(object {\n  \"a\": int,\n  \"b\": int,\n  \"c\": int,\n})`',
+      `expected arguments with signature \`[]\``,
     );
     expect(() => parse(`Dummy...`, schema)).to.throw(
       'syntax error at 1:8, mismatched input \'<EOF>\' expecting \'{\'',
@@ -126,7 +126,7 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
       'unknown class "DoesNotExist"',
     );
     expect(() => parse(`W 8`, schema)).to.throw(
-      'expected: `number(1)|number(2)|number(3)`',
+      'expected: `number 1 | number 2 | number 3`',
     );
   });
 
@@ -146,7 +146,8 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
   });
 
   it('can validate a practical example', function() {
-    const schema = parseSchema(`
+    const schema = parseSchema(
+      `
       schema {
         /// Use \`:document\` to restrict the type of a document's root.
         ":document": arrayOf Place,
@@ -185,18 +186,18 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
         ],
       }
     `,
-    createSchema({
-      classes: {
-        Point: class Point {
-          type = 'Point';
-          coordinates: [number, number];
-          constructor(x:number, y: number) {
-            this.coordinates = [x, y];
-          }
+      createSchema({
+        classes: {
+          Point: class Point {
+            type = 'Point';
+            coordinates: [number, number];
+            constructor(x: number, y: number) {
+              this.coordinates = [x, y];
+            }
+          },
         },
-      },
-    }),
-    'places.schema.txson',
+      }),
+      'places.schema.txson',
     );
     expect(parse(`[]`)).to.deep.eq([]);
     expect(() => parse(`{}`, schema)).to.throw(
@@ -205,15 +206,15 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
     expect(
       parse(
         `[{
-      id: 0,
-      name: "The good place",
-      cat: "accomodation",
-      status: "published",
-      description: null,
-      coords: Point(10, 10),
-      address: "123 Afterlife St.",
-      tags: ["great amenities", "free wifi"],
-    }]`,
+           id: 0,
+           name: "The good place",
+           cat: "accomodation",
+           status: "published",
+           description: null,
+           coords: Point(10, 10),
+           address: "123 Afterlife St.",
+           tags: ["great amenities", "free wifi"],
+        }]`,
         schema,
       ),
     ).to.deep.eq([
@@ -269,23 +270,141 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
     expect(() => parseSchema(`schema { x: class {} }`, undefined)).to.throw(
       'class only accepts an optional array of arguments',
     );
-    expect(() => parseSchema(`schema { x: arrayOf class [] }`, undefined)).to.throw(
+    expect(() =>
+      parseSchema(`schema { x: arrayOf class [] }`, undefined),
+    ).to.throw(
       'classes may only be defined at the schema level or as part of a schema-level `oneOf` clause',
     );
-    expect(() => parseSchema(`schema { x: oneOf [class [], int] }`, undefined)).to.throw(
+    expect(() =>
+      parseSchema(`schema { x: oneOf [class [], int] }`, undefined),
+    ).to.throw(
       'unexpected "int" in `oneOf [class, ...]`, expected: class|proto|object',
     );
-    expect(() => parseSchema(`schema { ':document': class }`, undefined)).to.throw(
-      'invalid class name',
-    );
-    expect(() => parseSchema(`schema { x: arrayOf proto {} }`, undefined)).to.throw(
+    expect(() =>
+      parseSchema(`schema { ':document': class }`, undefined),
+    ).to.throw('invalid class name');
+    expect(() =>
+      parseSchema(`schema { x: arrayOf proto {} }`, undefined),
+    ).to.throw(
       'prototypes may only be defined at the schema level or as part of a schema-level `oneOf` clause',
     );
-    expect(() => parseSchema(`schema { x: oneOf [proto {}, int] }`, undefined)).to.throw(
+    expect(() =>
+      parseSchema(`schema { x: oneOf [proto {}, int] }`, undefined),
+    ).to.throw(
       'unexpected "int" in `oneOf [proto, ...]`, expected: class|proto|object',
     );
-    expect(() => parseSchema(`schema { ':document': proto {} }`, undefined)).to.throw(
-      'invalid class name',
+    expect(() =>
+      parseSchema(`schema { ':document': proto {} }`, undefined),
+    ).to.throw('invalid class name');
+  });
+  it('misc', function() {
+    expect(() =>
+      parse(
+        `X ["aaa", {"x": int 0, y: []}]`,
+        parseSchema(`
+      schema { X: arrayOf [string, oneOf [object, arrayOf object]] }
+    `),
+      ),
+    ).to.not.throw();
+    parse(
+      `X [Y "zz", Z 2]`,
+      parseSchema(`
+        schema { X: arrayOf oneOf [Y, Z], Y: string, Z: number }
+    `),
     );
+    expect(() =>
+      parse(
+        `X [Y "zz", Z 2]`,
+        parseSchema(`
+        schema { X: arrayOf oneOf [Y, Z], Y: string, Z: number }
+    `),
+      ),
+    ).to.not.throw();
+    expect(
+      parse(
+        '[X 1, X "2"]',
+        parseSchema(
+          `schema {X: oneOf [int, string]}`,
+          createSchema({
+            deserializers: {
+              X: () => 'override',
+            },
+          }),
+        ),
+      ),
+    ).to.deep.equal(['override', 'override']);
+    expect(
+      parse(
+        '[X [1, "2"], X [2, "3"], Y [3, "4"]]',
+        parseSchema(
+          `schema {X: arrayOf [int, string], Y: X}`,
+          createSchema({
+            deserializers: {
+              Y: () => 'override',
+            },
+          }),
+        ),
+      ),
+    ).to.deep.equal([[1, '2'], [2, '3'], 'override']);
+    expect(
+      parse(
+        'VARIANT STRUCT ["STRUCT(x INTEGER, y INTEGER)", {"x": INT "1", "y": INT "2"}]',
+        parseSchema(
+          `schema {
+            INT: string,
+            STRUCT: arrayOf [string, oneOf [object, arrayOf object]],
+            ANY: oneOf [INT, STRUCT],
+            VARIANT: ANY,
+          }`,
+          createSchema({
+            deserializers: {},
+          }),
+        ),
+      ),
+    ).to.deep.equal([
+      'STRUCT(x INTEGER, y INTEGER)', {
+        x: '1',
+        y: '2',
+      },
+    ]);
+    expect(
+      parse(
+        `[
+          variant int 1,
+          variant string "x",
+          variant Y(),
+          variant C [X 1, X "a", { o: X 1, p: int 12, q: 12.2 }]
+        ]`,
+        parseSchema(
+          `schema {
+            Y: class,
+            X: oneOf [int, string, boolean],
+            C: arrayOf [int, string, object],
+            any: oneOf [int, string, bigint, boolean, float, Y, C, X],
+            variant: any,
+          }`,
+          createSchema({
+            deserializers: {
+              variant: (acc) =>
+                `variant ${JSON.stringify(acc.children[0].value)}`,
+              c: (acc) => `${acc.children[0].value}`,
+              X: () => 'X',
+            },
+            classes: {
+              Y: class Y {
+                get [Symbol.toStringTag]() {
+                  return 'Y';
+                }
+              },
+            },
+          }),
+        ),
+      ),
+    ).to.deep.equal([
+      'variant 1',
+      'variant "x"',
+      'variant {}',
+      'variant ["X","X",{"o":"X","p":12,"q":12.2}]',
+    ]);
   });
 });
