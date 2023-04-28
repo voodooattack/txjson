@@ -37,7 +37,9 @@ export interface ValueAccessor extends Accessor<ValueAccessor> {}
 
 export type InitialAccessor = Omit<ValueAccessor, 'value'>;
 
-export interface RawAccessor extends Omit<Accessor<RawAccessor>, 'value'> {}
+export interface RawAccessor extends Omit<Accessor<RawAccessor>, 'value'> {
+  set typeName(str: string);
+}
 
 export type Preprocessor = (value: RawAccessor) => void;
 export type Validator = (value: RawAccessor) => Error | void;
@@ -371,7 +373,8 @@ export namespace Schema {
     constructor(public baseSchema: Schema) {}
     abstract signature: string;
     abstract validator: Validator;
-    get deserializer(): Deserializer | undefined {
+    abstract deserializer: Deserializer;
+    get preprocessor(): Preprocessor | undefined {
       return undefined;
     }
   }
@@ -386,8 +389,12 @@ export namespace Schema {
         isValidIdent(typeName) ? typeName : JSON.stringify(typeName)
       } ${JSON.stringify(this.value)}`;
     }
-    get deserializer(): Deserializer | undefined {
-      return this.baseSchema.deserializers[this.type];
+    get deserializer(): Deserializer {
+      return (
+        this.baseSchema.deserializers[this.type] ??
+        ((acc) =>
+          acc.kind === NodeKind.Typed ? acc.children[0].value : acc.rawValue)
+      );
     }
     get validator(): Validator {
       return createPrimitiveValidator(typeof this.value, (acc) => {
@@ -408,9 +415,8 @@ export namespace Schema {
     get signature() {
       return `${this.inner!.signature}?`;
     }
-    get deserializer(): Deserializer | undefined {
+    get deserializer(): Deserializer {
       return function(acc) {
-        const child = acc.children[0];
         if (
           !(acc.typeName in acc.schema.validators) &&
           !(acc.typeName in acc.schema.deserializers) &&
@@ -421,10 +427,18 @@ export namespace Schema {
             `unknown type ${JSON.stringify(acc.typeName)}`,
           );
         }
-        if (child.rawValue === undefined || child.rawValue === null) {
-          return child.rawValue;
+        if (acc.rawValue === undefined || acc.rawValue === null) {
+          return acc.rawValue;
         }
-        return child.value;
+        if (acc.kind === NodeKind.Typed) {
+          return acc.children[0].value;
+        } else if (acc.kind === NodeKind.Primitive) {
+          return acc.rawValue;
+        }
+        throw new ValueError(
+          acc,
+          `can't deserialize ${JSON.stringify(acc.typeName)}`,
+        );
       };
     }
     get validator(): Validator {
@@ -454,6 +468,12 @@ export namespace Schema {
     }
     get signature() {
       return `${this.inner.signature}[]`;
+    }
+    get deserializer(): Deserializer {
+      return (acc) => {
+        const [arr] = acc.children;
+        return arr.children.map((v) => this.inner.deserializer(v));
+      };
     }
     get validator(): Validator {
       const inner = this.inner;
@@ -490,6 +510,19 @@ export namespace Schema {
         (k) => `  ${JSON.stringify(k)}: ${this.fields![k].signature},`,
       );
       return `object {\n${fields.join('\n')}\n}`;
+    }
+    get deserializer(): Deserializer {
+      return (acc) =>
+        safeObjectFromEntries(
+          (acc.typeName === ':object' ? acc : acc.children[0]).children.map(
+            (kv) => [
+              kv.key!,
+              this.fields ?
+                this.fields[kv.key!].deserializer(kv.children[0]) :
+                kv.value,
+            ],
+          ),
+        );
     }
     get validator(): Validator {
       const {baseSchema, signature, fields} = this;
@@ -575,41 +608,48 @@ export namespace Schema {
     get signature() {
       return this.types
         .map((t) =>
-          !isValidIdent(t.signature) && (t instanceof Alias || t instanceof Terminal) ?
+          !isValidIdent(t.signature) &&
+          (t instanceof Alias || t instanceof Terminal) ?
             `(${t.signature})` :
             t.signature,
         )
         .join(' | ');
     }
     get deserializer(): Deserializer {
-      const children = this.types.map((t) => [t.validator, t.deserializer]);
+      const children = this.types.map(
+        (t) =>
+          [t.validator, t.deserializer] as [Validator, Deserializer],
+      );
       const {signature} = this;
-      if (this.namespace && this.namespace in this.baseSchema.deserializers) {
-        return this.baseSchema.deserializers[this.namespace]!;
+      const des =
+        this.baseSchema.deserializers[this.namespace ?? '*']! ??
+        this.baseSchema.deserializers['*']!;
+      if (des) {
+        return des;
       }
       return function(acc) {
-        const child = acc.children[0];
+        const child = acc.kind === NodeKind.Typed ? acc.children[0] : acc;
         const errors: Error[] = [];
         for (const [validator, deserializer] of children) {
           if (deserializer) {
             try {
-              if (!validator?.(acc)) {
-                return deserializer(acc);
+              if (!validator?.(child)) {
+                return deserializer(child);
               }
             } catch (e: any) {
               errors.push(e);
             }
           }
         }
-        if (errors.length) {
-          throw new ValueError(
-            acc,
-            `could not deserialize value of type ${signature}: ${errors
-              .map((e) => e.message)
-              .join('\n\t* ')}`,
-          );
-        }
-        return child.value;
+        // if (errors.length) {
+        throw new ValueError(
+          acc,
+          `could not deserialize value of type ${signature}: ${errors
+            .map((e) => e.message)
+            .join('\n\t* ')}`,
+        );
+        // }
+        // return child.rawValue;
       };
     }
     get validator(): Validator {
@@ -663,6 +703,16 @@ export namespace Schema {
     get signature() {
       return `[${this.types.map((t) => t.signature).join(', ')}]`;
     }
+    get deserializer(): Deserializer {
+      return (acc) => {
+        const arr = acc.typeName === ':array' ? acc : acc.children[0];
+        return arr.children.map((v, i) =>
+          this.types[i] instanceof Terminal ?
+            v.value :
+            this.types[i].deserializer(v),
+        );
+      };
+    }
     get validator(): Validator {
       const {types, signature, label} = this;
       const validators = types.map(
@@ -675,7 +725,7 @@ export namespace Schema {
       return function(acc) {
         const arr = acc.typeName === ':array' ? acc : acc.children[0];
         if (arr.typeName !== ':array') {
-          /* return */ new ValueError(acc, 'invalid array');
+          return new ValueError(acc, 'invalid array');
         }
         const errors: Record<number, Error> = Object.create(null);
         let i = 0;
@@ -725,8 +775,14 @@ export namespace Schema {
     get signature() {
       return this.name;
     }
-    get deserializer(): Deserializer | undefined {
-      return this.baseSchema.deserializers[this.name];
+    get deserializer(): Deserializer {
+      return (
+        this.baseSchema.deserializers[this.name] ??
+        ((acc) =>
+          acc.kind === NodeKind.Primitive ?
+            acc.rawValue :
+            acc.children[0].value)
+      );
     }
     get validator(): Validator {
       const {name} = this;
@@ -741,9 +797,8 @@ export namespace Schema {
 
   export class Alias extends Type {
     constructor(
-      public schema: Schema,
       baseSchema: Schema,
-      public from: string,
+      public from: string | null,
       public to: string,
       public extraArgs?: Type | Type[],
     ) {
@@ -752,27 +807,38 @@ export namespace Schema {
     get signature() {
       return this.to;
     }
-    get deserializer(): Deserializer | undefined {
-      return (
-        this.baseSchema.deserializers[this.from] ??
-        this.baseSchema.deserializers[this.to]
-      );
+    get deserializer(): Deserializer {
+      const self = this;
+      return function(acc) {
+        if (self.from && self.baseSchema.deserializers[self.from]) {
+          return self.baseSchema.deserializers[self.from]!(acc);
+        }
+        const d =
+          acc.schema.deserializers[self.to] ?? acc.schema.deserializers['*'];
+        return d ? d(acc) : acc.rawValue;
+      };
     }
     get validator(): Validator {
       const self = this;
       return function(acc) {
-        const v = acc.schema.validators[self.to];
-        if (!v) {
+        if (self.from && self.baseSchema.validators[self.from]) {
+          return self.baseSchema.validators[self.from]!(acc);
+        }
+        if (
+          !(
+            self.to in acc.schema.classes ||
+            self.to in acc.schema.deserializers ||
+            self.to in acc.schema.prototypes ||
+            self.to in acc.schema.validators
+          )
+        ) {
           return new ValueError(
             acc,
             `missing aliased type ${JSON.stringify(self.to)}`,
           );
         }
-        return v(
-          acc.typeName.startsWith(':') || acc.typeName === self.to ?
-            acc :
-            acc.children[0],
-        );
+        const v = acc.schema.validators[self.to] ?? acc.schema.validators['*'];
+        return v?.(acc.kind === NodeKind.Typed ? acc.children[0] : acc);
       };
     }
   }
@@ -784,10 +850,12 @@ export namespace Schema {
       public args?: ArrayFixed,
     ) {
       super(baseSchema);
-      if (!className) debugger;
     }
     get signature() {
       return `class ${this.className}`;
+    }
+    get deserializer(): Deserializer {
+      return (acc) => acc.children[0].value;
     }
     get validator(): Validator {
       const {className, baseSchema, args} = this;
@@ -997,18 +1065,8 @@ export function createSchemaOfSchema(
       safeObjectFromEntries(
         Object.keys(baseSchema.validators)
           .filter((k) => !k.startsWith(':'))
-          .map<[string, Validator]>((k) => {
-            return [
-              k,
-              function(a) {
-                // if (a.typeName.startsWith(':')) debugger;
-                return a.rawValue === undefined ||
-                  a.rawValue === null ||
-                  typeof a.rawValue === 'object' ?
-                  undefined :
-                  new ValueError(a, 'no literal values are allowed.');
-              },
-            ];
+          .map<[string, Validator | undefined]>((k) => {
+            return [k, undefined];
           }),
       ),
       schemaValidators(baseSchema),
@@ -1020,15 +1078,40 @@ export function createSchemaOfSchema(
           .map((k) => [
             k,
             (acc: ValueAccessor) => {
-              if (!(acc.children[0].value instanceof Schema.Type)) debugger;
+              if (acc.parent?.kind === NodeKind.Pair) {
+                if (acc.parent.parent?.parent?.typeName === 'schema') {
+                  return new Schema.Alias(
+                    baseSchema,
+                    acc.parent.key!,
+                    acc.typeName,
+                  );
+                }
+              }
               return new Schema.Terminal(baseSchema, k);
             },
           ]),
       ),
       {
         'schema': (acc) => {
-          const value = acc.children[0].value;
+          const value = acc.children[0].value as Record<string, Schema.Type>;
           return new Schema({
+            preprocessors: Object.assign(
+              Object.create(null),
+              // ':document' in value ? {
+              //   ':document': (acc: RawAccessor) => {
+              //     if (!value[':document'].validator(acc)) {
+              //       acc.typeName = value[':document'].signature;
+              //     }
+              //   },
+              // } : {},
+              baseSchema.preprocessors,
+              safeObjectFromEntries(
+                Object.entries(value).map(([k, v]) => [
+                  k,
+                  v.preprocessor ?? baseSchema.preprocessors[k],
+                ]),
+              ),
+            ),
             prototypes: Object.assign(
               Object.create(null),
               baseSchema.prototypes,
@@ -1036,24 +1119,23 @@ export function createSchemaOfSchema(
             classes: Object.assign(Object.create(null), baseSchema.classes),
             validators: Object.assign(
               Object.create(null),
-              baseSchema.validators,
               safeObjectFromEntries(
-                Object.entries(value as Record<PropertyKey, Schema.Type>).map(
-                  ([k, v]) => [k, v.validator],
-                ),
+                Object.entries(value).map(([k, v]) => [k, v.validator]),
               ),
+              baseSchema.validators,
             ),
             deserializers: Object.assign(
               Object.create(null),
               baseSchema.deserializers,
               safeObjectFromEntries(
-                Object.entries(value as Record<PropertyKey, Schema.Type>).map(
-                  ([k, v]) => [k, v.deserializer ?? baseSchema.deserializers[k]],
-                ),
+                Object.entries(value).map(([k, v]) => [
+                  k,
+                  v.deserializer ?? baseSchema.deserializers[k],
+                ]),
               ),
             ),
             meta: {
-              schema: acc.children[0].value,
+              schema: value,
             },
           });
         },
@@ -1080,12 +1162,11 @@ export function createSchemaOfSchema(
             new Schema.ArrayOf(baseSchema, acc.children[0].value);
         },
         '*': function(acc) {
-          return !(acc.children[0]?.value instanceof Schema.Type) ?
+          return acc.kind === NodeKind.Primitive ?
             new Schema.Literal(acc.schema, acc.typeName, acc.rawValue) :
             new Schema.Alias(
-              acc.schema,
               baseSchema,
-              getNamespace(acc)!,
+              acc.parent?.key ?? null,
               acc.typeName,
               acc.children[0].value,
             );

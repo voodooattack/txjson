@@ -29,8 +29,29 @@ abstract class ASTNode implements ValueAccessor {
   constructor(
     public rule: ParserRuleContext,
     public schema: ActiveSchema,
+    private _typeName: string,
     private _rawValue?: any,
   ) {}
+  get typeName() {
+    return this._typeName;
+  }
+  set typeName(name: string) {
+    if (this.kind !== NodeKind.Typed) {
+      if (this.parent) {
+        const pIdx = this.parent?.children.indexOf(this);
+        if (typeof pIdx !== 'undefined' && pIdx !== -1) {
+          const n = new TypedValueNode(this.rule, this.schema, name);
+          n.child = this;
+          this.parent.children[pIdx] = n;
+        }
+      } else if (this.children[0]) {
+        this.children[0] = new TypedValueNode(this.rule, this.schema, name);
+        this.children[0].children[0] = this;
+      }
+      return;
+    }
+    this._typeName = name;
+  }
   public get key(): string | undefined {
     return;
   }
@@ -85,7 +106,6 @@ abstract class ASTNode implements ValueAccessor {
   }
   public abstract preprocess(): void;
   public abstract get kind(): NodeKind;
-  public abstract get typeName(): string;
   public abstract get children(): ValueAccessor[];
 }
 
@@ -135,18 +155,13 @@ class PrimitiveNode extends ASTNode {
   public get kind() {
     return NodeKind.Primitive;
   }
-  private _typeName: string;
   constructor(
     rule: ParserRuleContext,
     schema: ActiveSchema,
     typeName: string,
     rawValue: number | string | boolean | null | undefined | bigint | RegExp,
   ) {
-    super(rule, schema, rawValue);
-    this._typeName = typeName;
-  }
-  get typeName() {
-    return this._typeName;
+    super(rule, schema, typeName, rawValue);
   }
   protected getValue() {
     return (
@@ -162,6 +177,12 @@ class PrimitiveNode extends ASTNode {
 }
 
 class ArrayNode extends CompoundNode {
+  constructor(
+    rule: ParserRuleContext,
+    schema: ActiveSchema,
+  ) {
+    super(rule, schema, ':array');
+  }
   public get kind() {
     return NodeKind.Array;
   }
@@ -170,9 +191,6 @@ class ArrayNode extends CompoundNode {
   }
   public get rawValue() {
     return this.children.map((v) => v.rawValue);
-  }
-  get typeName() {
-    return ':array';
   }
 }
 
@@ -185,7 +203,7 @@ class PairNode extends SimpleNode {
     schema: ActiveSchema,
     private _key: string,
   ) {
-    super(rule, schema);
+    super(rule, schema, ':pair');
   }
   public get key(): string {
     return this._key;
@@ -196,12 +214,15 @@ class PairNode extends SimpleNode {
   get rawValue() {
     return this.child?.rawValue;
   }
-  get typeName(): string {
-    return ':pair';
-  }
 }
 
 class ObjectNode extends CompoundNode {
+  constructor(
+    rule: ParserRuleContext,
+    schema: ActiveSchema,
+  ) {
+    super(rule, schema, ':object');
+  }
   public get kind(): NodeKind {
     return NodeKind.Object;
   }
@@ -216,9 +237,6 @@ class ObjectNode extends CompoundNode {
       return Object.assign(p, {[n.key]: n.rawValue});
     }, Object.create(null));
   }
-  get typeName() {
-    return ':object';
-  }
 }
 
 class TypedValueNode extends SimpleNode {
@@ -228,9 +246,9 @@ class TypedValueNode extends SimpleNode {
   constructor(
     rule: ParserRuleContext,
     schema: ActiveSchema,
-    public typeName: string,
+    typeName: string,
   ) {
-    super(rule, schema);
+    super(rule, schema, typeName);
   }
   get rawValue(): any {
     return this.child?.rawValue;
@@ -265,9 +283,9 @@ class ProtoConstructionNode extends SimpleNode {
   constructor(
     rule: ParserRuleContext,
     public schema: ActiveSchema,
-    public typeName: string,
+    typeName: string,
   ) {
-    super(rule, schema);
+    super(rule, schema, typeName);
   }
   public override validate() {
     const {prototypes = Object.create(null)} = this.schema;
@@ -302,9 +320,9 @@ class CtorCallValueNode extends CompoundNode {
   constructor(
     rule: ParserRuleContext,
     public schema: ActiveSchema,
-    public typeName: string,
+    typeName: string,
   ) {
-    super(rule, schema);
+    super(rule, schema, typeName);
   }
   public override validate() {
     const {classes = Object.create(null)} = this.schema;

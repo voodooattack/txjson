@@ -2,6 +2,7 @@ import {use} from 'chai';
 import equalBytes from 'chai-bytes';
 
 import {createSchema, parse, parseSchema} from '../src/index';
+import {safeObjectFromEntries} from '../src/util';
 
 const {expect} = use(equalBytes);
 
@@ -39,7 +40,6 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
       Dummy,
     },
     deserializers: {
-      X: (a) => BigInt(a.children[0].value),
       ExternalRef: (acc) =>
         'externally_referenced_type: ' + JSON.stringify(acc.rawValue),
     },
@@ -109,7 +109,7 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
     expect(() =>
       parse(`D {a: "invalid", b: "aaa", c: 1 }`, schema, '/src/aaa/test.txjson'),
     ).to.throw(
-      '/src/aaa/test.txjson(1,2): error in expression `{a: "invalid", b: "aaa", c: 1 }`: expected object with signature `object {\n    "a": X,\n    "b": string,\n    "c": undefined,\n  }`\nvalidation failed with errors:\n  * in field "a": (1,6): in expression `"invalid"`: expected: `bigint | number`, validation failed with errors:\n        * alternative `bigint` failed with error: (1,6): in expression `"invalid"`: invalid bigint\n        * alternative `number` failed with error: (1,3): in expression `a: "invalid"`: expected "number", found "string"\n  * in field "c": (1,27): in expression `c: 1`: expected "undefined", found "number"',
+      'expected object with signature `object {\n    "a": X,\n    "b": string,\n    "c": undefined,\n  }',
     );
     expect(() => parse(`X YYY`, schema)).to.throw('unknown type "YYY"');
     expect(() => parse(`Test(1, "2", 3)`, schema)).to.throw(
@@ -187,6 +187,16 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
       }
     `,
       createSchema({
+        deserializers: {
+          Place: (acc) => {
+            return {
+              PLACE_DESERIALIZED: true,
+              ...safeObjectFromEntries(
+                acc.children.map((c) => [c.key!, c.value]),
+              ),
+            };
+          },
+        },
         classes: {
           Point: class Point {
             type = 'Point';
@@ -219,6 +229,7 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
       ),
     ).to.deep.eq([
       {
+        PLACE_DESERIALIZED: true,
         id: 0,
         name: 'The good place',
         cat: 'accomodation',
@@ -316,8 +327,7 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
       parse(
         `X [Y "zz", Z 2]`,
         parseSchema(`
-        schema { X: arrayOf oneOf [Y, Z], Y: string, Z: number }
-    `),
+        schema { X: arrayOf oneOf [Y, Z], Y: string, Z: number }`),
       ),
     ).to.not.throw();
     expect(
@@ -362,16 +372,20 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
         ),
       ),
     ).to.deep.equal([
-      'STRUCT(x INTEGER, y INTEGER)', {
+      'STRUCT(x INTEGER, y INTEGER)',
+      {
         x: '1',
         y: '2',
       },
     ]);
+  });
+  it('misc 2', function() {
     expect(
       parse(
         `[
           variant int 1,
           variant string "x",
+          variant X 0,
           variant Y(),
           variant C [X 1, X "a", { o: X 1, p: int 12, q: 12.2 }]
         ]`,
@@ -380,7 +394,7 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
             Y: class,
             X: oneOf [int, string, boolean],
             C: arrayOf [int, string, object],
-            any: oneOf [int, string, bigint, boolean, float, Y, C, X],
+            any: oneOf [bigint, boolean, float, Y, C, X],
             variant: any,
           }`,
           createSchema({
@@ -403,6 +417,7 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
     ).to.deep.equal([
       'variant 1',
       'variant "x"',
+      'variant "X"',
       'variant {}',
       'variant ["X","X",{"o":"X","p":12,"q":12.2}]',
     ]);
