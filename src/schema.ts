@@ -35,15 +35,13 @@ export interface Accessor<T extends Partial<Accessor<T>>> {
 
 export interface ValueAccessor extends Accessor<ValueAccessor> {}
 
-export type InitialAccessor = Omit<ValueAccessor, 'value'>;
-
 export interface RawAccessor extends Omit<Accessor<RawAccessor>, 'value'> {
   set typeName(str: string);
 }
 
 export type Preprocessor = (value: RawAccessor) => void;
 export type Validator = (value: RawAccessor) => Error | void;
-export type Deserializer = (value: InitialAccessor) => any;
+export type Deserializer = (value: ValueAccessor) => any;
 
 export type ActiveSchema = Required<Schema> & {
   parser: TxJSONParser;
@@ -392,8 +390,7 @@ export namespace Schema {
     get deserializer(): Deserializer {
       return (
         this.baseSchema.deserializers[this.type] ??
-        ((acc) =>
-          acc.kind === NodeKind.Typed ? acc.children[0].value : acc.rawValue)
+        ((acc) => acc.value)
       );
     }
     get validator(): Validator {
@@ -432,13 +429,9 @@ export namespace Schema {
         }
         if (acc.kind === NodeKind.Typed) {
           return acc.children[0].value;
-        } else if (acc.kind === NodeKind.Primitive) {
-          return acc.rawValue;
+        } else {
+          return acc.value;
         }
-        throw new ValueError(
-          acc,
-          `can't deserialize ${JSON.stringify(acc.typeName)}`,
-        );
       };
     }
     get validator(): Validator {

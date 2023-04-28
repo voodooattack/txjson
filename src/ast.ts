@@ -85,14 +85,14 @@ abstract class ASTNode implements ValueAccessor {
   protected abstract getValue(): any;
   public validate(): void {
     if (
-      ![
-        this.typeName.startsWith(':'),
-        '*' in this.schema.validators,
-        this.typeName in this.schema.classes,
-        this.typeName in this.schema.prototypes,
-        this.typeName in this.schema.deserializers,
-        this.typeName in this.schema.validators,
-      ].includes(true)
+      !(
+        this.typeName.startsWith(':') ||
+        '*' in this.schema.validators ||
+        this.typeName in this.schema.classes ||
+        this.typeName in this.schema.prototypes ||
+        this.typeName in this.schema.deserializers ||
+        this.typeName in this.schema.validators
+      )
     ) {
       throw new ValueError(
         this,
