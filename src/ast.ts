@@ -19,7 +19,7 @@ import type {
 } from './parser/TxJSONParser';
 import type {ActiveSchema, Schema, ValueAccessor} from './schema';
 import {NodeKind} from './schema';
-import {ValueError} from './util';
+import {ValueError, getExpression} from './util';
 
 const emptyValue = Symbol.for('TXJSON_EMPTY');
 
@@ -32,6 +32,9 @@ abstract class ASTNode implements ValueAccessor {
     private _typeName: string,
     private _rawValue?: any,
   ) {}
+  get expression() {
+    return getExpression(this);
+  }
   get typeName() {
     return this._typeName;
   }

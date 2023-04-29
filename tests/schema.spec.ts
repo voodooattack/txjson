@@ -1,6 +1,6 @@
 import {use} from 'chai';
 import equalBytes from 'chai-bytes';
-
+import * as util from 'util';
 import {createSchema, parse, parseSchema} from '../src/index';
 import {safeObjectFromEntries} from '../src/util';
 
@@ -109,7 +109,7 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
     expect(() =>
       parse(`D {a: "invalid", b: "aaa", c: 1 }`, schema, '/src/aaa/test.txjson'),
     ).to.throw(
-      'expected object with signature `object {\n    "a": X,\n    "b": string,\n    "c": undefined,\n  }',
+      'expected object with signature `object { \"a\": X, \"b\": string, \"c\": undefined }',
     );
     expect(() => parse(`X YYY`, schema)).to.throw('unknown type "YYY"');
     expect(() => parse(`Test(1, "2", 3)`, schema)).to.throw(
@@ -126,7 +126,7 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
       'unknown class "DoesNotExist"',
     );
     expect(() => parse(`W 8`, schema)).to.throw(
-      'expected: `number 1 | number 2 | number 3`',
+      'expected: `number(1)|number(2)|number(3)`',
     );
   });
 
@@ -307,6 +307,165 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
     expect(() =>
       parseSchema(`schema { ':document': proto {} }`, undefined),
     ).to.throw('invalid class name');
+  });
+  it('complex', function() {
+    const schema = parseSchema(`
+    schema {
+      ':document': arrayOf TestCase,
+      TestCase: oneOf [TestSQL, TestExpr],
+      TestCaseConfig: object,
+      TestSQL: object {
+        mode: maybe oneOf ['lax', 'strict'],
+        description: string,
+        disable: maybe boolean,
+        config: maybe TestCaseConfig,
+        query: string,
+        columns: maybe arrayOf oneOf [string, null],
+        expressions: maybe arrayOf oneOf [string, null],
+        normalized: maybe arrayOf oneOf [string, null],
+        canonical: maybe arrayOf oneOf [string, null],
+        results: maybe arrayOf oneOf [ANY, null],
+        parse_error: maybe boolean,
+      },
+      TestExpr: object {
+        mode: 'spreadsheet',
+        description: string,
+        disable: maybe boolean,
+        config: maybe TestCaseConfig,
+        query: oneOf [string, arrayOf string],
+        expressions: maybe oneOf [string, arrayOf oneOf [string, null]],
+        normalized: maybe oneOf [string, arrayOf oneOf [string, null]],
+        canonical: maybe oneOf [string, arrayOf oneOf [string, null]],
+        results: maybe oneOf [arrayOf oneOf [ANY, null], oneOf [ANY, null]],
+        parse_error: maybe oneOf [boolean, arrayOf oneOf [boolean, null]],
+      },
+      TYPEID: string,
+      NULL: oneOf [undefined, TYPEID],
+      UNDEFINED: undefined,
+      INT: string,
+      UINT: INT,
+      INT8: INT,
+      INT16: INT,
+      INT32: INT,
+      INT64: INT,
+      UINT8: INT,
+      UINT16: INT,
+      UINT32: INT,
+      UINT64: INT,
+      FLOAT32: oneOf [float, string],
+      FLOAT: oneOf [float, string],
+      STRING: oneOf [
+        string,
+        arrayOf [string, int],
+      ],
+      DECIMAL: oneOf [
+        string,
+        arrayOf [string, int, int]
+      ],
+      TIME: string,
+      DATE: string,
+      DATETIME: string,
+      TIMESTAMP: string,
+      JSON: string,
+      BYTES: oneOf [
+        arrayOf int,
+        string,
+      ],
+      GEO: string,
+      BOOL: bool,
+      INTERVAL: oneOf [string, float],
+      ANY: oneOf [
+        BOOL,
+        INT,
+        FLOAT,
+        DECIMAL,
+        JSON,
+        BYTES,
+        GEO,
+        STRING,
+        TIME,
+        DATE,
+        DATETIME,
+        TIMESTAMP,
+        INTERVAL,
+        UNDEFINED,
+        STRUCT,
+        NULL,
+      ],
+      VARIANT: oneOf [
+        ANY,
+        object {
+          __type: string,
+          __value: any,
+        },
+        arrayOf oneOf [
+          ANY,
+          object {
+          __type: string,
+          __value: any,
+        }]
+      ],
+      STRUCT: object,
+      Date: string,
+      ValueError: string,
+      ErrorNode:
+        arrayOf object {
+          type: string,
+          code: string,
+          level: string,
+          location: object {
+            start: int,
+            end: int,
+          },
+        }
+    }`, createSchema({
+      deserializers: {
+        UNDEFINED: () => `UNDEFINED`,
+        NULL: () => `NULL`,
+        TYPEID: () => `TYPEID`,
+        STRING: () => `STRING`,
+        STRUCT: (acc) => ({STRUCT: acc.children[0].value}),
+        VARIANT: (acc) => ({VARIANT: acc.children[0].value}),
+        INTERVAL: (acc) => ({INTERVAL: acc.children[0].value}),
+        INT: (acc) => ({'INT': acc.rawValue}),
+        ValueError: () => `ValueError`,
+      },
+    }));
+    const res = parse(`[
+      {
+        "description": "Math",
+        "mode": "spreadsheet",
+        "query": [
+          "abc",
+          "cde"
+        ],
+        "results": [
+          [
+            VARIANT STRUCT {"x": INT "1", "y": INT "2"},
+            NULL,
+            VARIANT INTERVAL "P1M15D"
+          ],
+        ],
+      }
+    ]`, schema);
+    console.log(util.inspect(res, {
+      depth: Infinity,
+    }));
+    expect(res).to.deep.equal([{
+      'description': 'Math',
+      'mode': 'spreadsheet',
+      'query': [
+        'abc',
+        'cde',
+      ],
+      'results': [
+        [
+          {VARIANT: {STRUCT: {'x': {INT: '1'}, 'y': {INT: '2'}}}},
+          'NULL',
+          {VARIANT: {INTERVAL: 'P1M15D'}},
+        ],
+      ],
+    }]);
   });
   it('misc', function() {
     expect(() =>

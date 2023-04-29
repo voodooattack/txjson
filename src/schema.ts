@@ -124,7 +124,7 @@ function createSignatureValidator(
     arr.children.forEach((c, i) => {
       const e = validators[i]?.(c);
       if (e) {
-        if (e instanceof ValueError) e.simple = true;
+        if (e instanceof ValueError) e.simplified = true;
         errors[i] = e;
       }
     });
@@ -385,13 +385,10 @@ export namespace Schema {
       const typeName = this.type.replace(/^:/, '');
       return `${
         isValidIdent(typeName) ? typeName : JSON.stringify(typeName)
-      } ${JSON.stringify(this.value)}`;
+      }(${JSON.stringify(this.value)})`;
     }
     get deserializer(): Deserializer {
-      return (
-        this.baseSchema.deserializers[this.type] ??
-        ((acc) => acc.value)
-      );
+      return this.baseSchema.deserializers[this.type] ?? ((acc) => acc.value);
     }
     get validator(): Validator {
       return createPrimitiveValidator(typeof this.value, (acc) => {
@@ -437,6 +434,9 @@ export namespace Schema {
     get validator(): Validator {
       const innerValidator = this.inner!.validator;
       return function(acc) {
+        if (acc.rawValue === undefined || acc.rawValue === null) {
+          return;
+        }
         if (
           !(acc.typeName in acc.schema.validators) &&
           !(acc.typeName in acc.schema.deserializers) &&
@@ -446,9 +446,6 @@ export namespace Schema {
             acc,
             `unknown type ${JSON.stringify(acc.typeName)}`,
           );
-        }
-        if (acc.rawValue === undefined || acc.rawValue === null) {
-          return;
         }
         return innerValidator(acc);
       };
@@ -460,11 +457,15 @@ export namespace Schema {
       super(baseSchema);
     }
     get signature() {
-      return `${this.inner.signature}[]`;
+      return `${
+        isValidIdent(this.inner.signature) ?
+          this.inner.signature :
+          `(${this.inner.signature})`
+      }[]`;
     }
     get deserializer(): Deserializer {
       return (acc) => {
-        const [arr] = acc.children;
+        const arr = acc.kind === NodeKind.Array ? acc : acc.children[0];
         return arr.children.map((v) => this.inner.deserializer(v));
       };
     }
@@ -500,22 +501,35 @@ export namespace Schema {
     get signature(): string {
       if (this.fields === null) return 'object';
       const fields = Object.keys(this.fields).map(
-        (k) => `  ${JSON.stringify(k)}: ${this.fields![k].signature},`,
+        (k) => `${JSON.stringify(k)}: ${this.fields![k].signature}`,
       );
-      return `object {\n${fields.join('\n')}\n}`;
+      return `object { ${fields.join(', ')} }`;
     }
     get deserializer(): Deserializer {
-      return (acc) =>
-        safeObjectFromEntries(
+      const {fields} = this;
+      if (fields === null) {
+        return function(acc) {
+          return acc.value;
+        };
+      }
+      return (acc) => {
+        const deserializers = safeObjectFromEntries(
+          Object.entries(fields).map(([k, v]) => [
+            k,
+            acc.schema.deserializers[k] ?? v?.deserializer,
+          ]),
+        ) as Record<string, Deserializer>;
+        return safeObjectFromEntries(
           (acc.typeName === ':object' ? acc : acc.children[0]).children.map(
-            (kv) => [
-              kv.key!,
-              this.fields ?
-                this.fields[kv.key!].deserializer(kv.children[0]) :
-                kv.value,
-            ],
+            (kv) => {
+              return [
+                kv.key!,
+                deserializers[kv.key!](kv.children[0]),
+              ];
+            },
           ),
         );
+      };
     }
     get validator(): Validator {
       const {baseSchema, signature, fields} = this;
@@ -523,7 +537,7 @@ export namespace Schema {
         return function(acc) {
           const obj = acc.typeName === ':object' ? acc : acc.children[0];
           if (!obj || obj.typeName !== ':object') {
-            return new ValueError(acc, `expected object`);
+            return new ValueError(obj, `expected object`);
           }
         };
       }
@@ -557,7 +571,7 @@ export namespace Schema {
           const e = validator?.(v);
           if (e) {
             if (e instanceof ValueError) {
-              e.simple = true;
+              e.simplified = true;
             }
             errors[k] = e;
           }
@@ -602,24 +616,17 @@ export namespace Schema {
       return this.types
         .map((t) =>
           !isValidIdent(t.signature) &&
-          (t instanceof Alias || t instanceof Terminal) ?
+          (t instanceof Terminal || t instanceof Alias) ?
             `(${t.signature})` :
             t.signature,
         )
-        .join(' | ');
+        .join('|');
     }
     get deserializer(): Deserializer {
       const children = this.types.map(
-        (t) =>
-          [t.validator, t.deserializer] as [Validator, Deserializer],
+        (t) => [t.validator, t.deserializer] as [Validator, Deserializer],
       );
       const {signature} = this;
-      const des =
-        this.baseSchema.deserializers[this.namespace ?? '*']! ??
-        this.baseSchema.deserializers['*']!;
-      if (des) {
-        return des;
-      }
       return function(acc) {
         const child = acc.kind === NodeKind.Typed ? acc.children[0] : acc;
         const errors: Error[] = [];
@@ -634,15 +641,12 @@ export namespace Schema {
             }
           }
         }
-        // if (errors.length) {
         throw new ValueError(
           acc,
           `could not deserialize value of type ${signature}: ${errors
             .map((e) => e.message)
             .join('\n\t* ')}`,
         );
-        // }
-        // return child.rawValue;
       };
     }
     get validator(): Validator {
@@ -658,7 +662,7 @@ export namespace Schema {
             if (!e) {
               return;
             }
-            if (e instanceof ValueError) e.simple = true;
+            if (e instanceof ValueError) e.simplified = true;
             errors[sig] = errors[sig] ?? [];
             errors[sig].push(e);
           } catch (e) {
@@ -672,13 +676,12 @@ export namespace Schema {
             1,
           )}\`, validation failed with errors:\n${Object.entries(errors)
             .flatMap(([k, errs]) =>
-              errs.map(
-                (e) =>
-                  `  * alternative \`${indent(
-                    k,
-                    2,
-                  )}\` failed with error: ${indent(e.message, 2)}`,
-              ),
+              errs.map((e) => {
+                return `  * alternative \`${indent(
+                  k,
+                  2,
+                )}\` failed with error: ${indent(e.message, 2)}`;
+              }),
             )
             .join('\n')}`,
         );
@@ -726,7 +729,7 @@ export namespace Schema {
           if (i < arr.children.length) {
             const e = validator?.(arr.children[i]);
             if (e) {
-              if (e instanceof ValueError) e.simple = true;
+              if (e instanceof ValueError) e.simplified = true;
               errors[i] = e;
             }
           } else if (!optional) {
@@ -769,22 +772,18 @@ export namespace Schema {
       return this.name;
     }
     get deserializer(): Deserializer {
-      return (
-        this.baseSchema.deserializers[this.name] ??
-        ((acc) =>
-          acc.kind === NodeKind.Primitive ?
-            acc.rawValue :
-            acc.children[0].value)
-      );
+      return (acc) =>
+        acc.kind === NodeKind.Primitive ? acc.value : acc.children[0].value;
     }
     get validator(): Validator {
       const {name} = this;
-      return (
-        this.baseSchema.validators[name] ??
-        function(acc) {
-          return acc.schema.validators[name]?.(acc);
-        }
-      );
+      return function(acc) {
+        return acc.schema.validators[name]?.(
+          acc.typeName !== name && acc.kind !== NodeKind.Typed ?
+            acc :
+            acc.children[0],
+        );
+      };
     }
   }
 
@@ -801,37 +800,45 @@ export namespace Schema {
       return this.to;
     }
     get deserializer(): Deserializer {
-      const self = this;
+      const {baseSchema, from, to} = this;
       return function(acc) {
-        if (self.from && self.baseSchema.deserializers[self.from]) {
-          return self.baseSchema.deserializers[self.from]!(acc);
+        if (from && baseSchema.deserializers[from]) {
+          return baseSchema.deserializers[from]!(acc);
         }
         const d =
-          acc.schema.deserializers[self.to] ?? acc.schema.deserializers['*'];
-        return d ? d(acc) : acc.rawValue;
+          acc.schema.deserializers[to] ?? acc.schema.deserializers['*'];
+        return d ?
+          d(acc.typeName === from ? acc.children[0] : acc) :
+          acc.kind === NodeKind.Typed ?
+            acc.children[0].value :
+            acc.value;
       };
     }
     get validator(): Validator {
-      const self = this;
+      const {baseSchema, from, to} = this;
       return function(acc) {
-        if (self.from && self.baseSchema.validators[self.from]) {
-          return self.baseSchema.validators[self.from]!(acc);
+        if (from && baseSchema.validators[from]) {
+          return baseSchema.validators[from]!(acc);
         }
         if (
           !(
-            self.to in acc.schema.classes ||
-            self.to in acc.schema.deserializers ||
-            self.to in acc.schema.prototypes ||
-            self.to in acc.schema.validators
+            to in acc.schema.classes ||
+            to in acc.schema.deserializers ||
+            to in acc.schema.prototypes ||
+            to in acc.schema.validators
           )
         ) {
           return new ValueError(
             acc,
-            `missing aliased type ${JSON.stringify(self.to)}`,
+            `missing aliased type ${JSON.stringify(to)}`,
           );
         }
-        const v = acc.schema.validators[self.to] ?? acc.schema.validators['*'];
-        return v?.(acc.kind === NodeKind.Typed ? acc.children[0] : acc);
+        const v = acc.schema.validators[to] ?? acc.schema.validators['*'];
+        return v?.(
+          acc.kind === NodeKind.Typed || acc.typeName === from ?
+            acc.children[0] :
+            acc,
+        );
       };
     }
   }
@@ -1080,6 +1087,9 @@ export function createSchemaOfSchema(
                   );
                 }
               }
+              if (acc.schema.meta.knownTypes.has(acc.typeName)) {
+                return new Schema.Alias(baseSchema, null, acc.typeName);
+              }
               return new Schema.Terminal(baseSchema, k);
             },
           ]),
@@ -1113,7 +1123,12 @@ export function createSchemaOfSchema(
             validators: Object.assign(
               Object.create(null),
               safeObjectFromEntries(
-                Object.entries(value).map(([k, v]) => [k, v.validator]),
+                Object.entries(value).map(([k, v]) => [
+                  k,
+                  baseSchema.validators[k] ??
+                    baseSchema.validators['*'] ??
+                    v.validator,
+                ]),
               ),
               baseSchema.validators,
             ),
@@ -1123,7 +1138,9 @@ export function createSchemaOfSchema(
               safeObjectFromEntries(
                 Object.entries(value).map(([k, v]) => [
                   k,
-                  v.deserializer ?? baseSchema.deserializers[k],
+                  baseSchema.deserializers[k] ??
+                    baseSchema.deserializers['*'] ??
+                    v.deserializer,
                 ]),
               ),
             ),

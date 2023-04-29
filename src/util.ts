@@ -30,15 +30,13 @@ export class ValueError extends Error {
   constructor(
     public acc: RawAccessor,
     private msg: string,
-    public simple = false,
+    public simplified = false,
   ) {
     super();
   }
   get message() {
-    if (this.simple) {
-      return `${getLoc(this.acc, true)}: in expression \`${indent(getExpression(
-        this.acc,
-      ), 0)}\`: ${this.msg}`;
+    if (this.simplified) {
+      return `${getLoc(this.acc, true)}: ${this.msg}`;
     }
     return `${getLoc(this.acc)}: error in expression \`${indent(getExpression(
       this.acc,
@@ -61,5 +59,5 @@ export function indent(str: string, level: number = 0, reindent?: boolean) {
 }
 
 export function isValidIdent(str: string) {
-  return /^([$_]|[^\0-/])+$/.test(str);
+  return /^[$_\w\d][\w\d_$]*$/.test(str);
 }
