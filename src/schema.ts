@@ -644,7 +644,7 @@ export namespace Schema {
         throw new ValueError(
           acc,
           `could not deserialize value of type ${signature}: ${errors
-            .map((e) => e.message)
+            .map((e) => e instanceof ValueError ? e.message : e.stack ?? e.message)
             .join('\n\t* ')}`,
         );
       };
@@ -680,7 +680,7 @@ export namespace Schema {
                 return `  * alternative \`${indent(
                   k,
                   2,
-                )}\` failed with error: ${indent(e.message, 2)}`;
+                )}\` failed with error: ${indent(e instanceof ValueError ? e.message : e.stack ?? e.message, 2)}`;
               }),
             )
             .join('\n')}`,
