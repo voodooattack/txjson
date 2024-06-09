@@ -1,6 +1,6 @@
 {
   "name": "txjson",
-  "version": "1.1.0",
+  "version": "1.1.0-0",
   "description": "An extension of JSON5 with rich inline type information.",
   "author": {
     "name": "Abdullah Ali",
@@ -11,7 +11,7 @@
     "url": "https://github.com/voodooattack/txjson",
     "type": "github"
   },
-  "type": "module",
+  "type": "commonjs",
   "license": "MIT",
   "tags": [
     "JSON",
