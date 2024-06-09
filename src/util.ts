@@ -1,12 +1,9 @@
-import type {BufferedTokenStream} from 'antlr4ts/BufferedTokenStream';
-import {ParserRuleContext} from 'antlr4ts/ParserRuleContext';
-import type {Token} from 'antlr4ts/Token';
-import type {TerminalNode} from 'antlr4ts/tree/TerminalNode';
-import type {RawAccessor} from './schema';
+import {ParserRuleContext, type BufferedTokenStream, type TerminalNode, type Token} from 'antlr4ng';
+import type {RawAccessor} from './schema.ts';
 
 export function getExpression(acc: RawAccessor) {
   const ctx = acc.rule as ParserRuleContext | TerminalNode;
-  const [startTok, endTok]: [Token, Token] =
+  const [startTok, endTok]: [Token|null, Token|null] =
     ctx instanceof ParserRuleContext ?
       [acc.rule.start, acc.rule.stop as Token] :
       [ctx.symbol, ctx.symbol];
@@ -19,9 +16,9 @@ export function getLoc(acc: RawAccessor, simple = false) {
   const ctx = acc.rule as ParserRuleContext | TerminalNode;
   let loc = simple ? '' : acc.schema.meta.fileName ?? '';
   if (ctx instanceof ParserRuleContext) {
-    loc += `(${ctx.start.line},${ctx.start.charPositionInLine})`;
+    loc += `(${ctx.start?.line},${ctx.start?.column})`;
   } else {
-    loc += `(${ctx.symbol.line},${ctx.symbol.charPositionInLine})`;
+    loc += `(${ctx.symbol.line},${ctx.symbol.column})`;
   }
   return loc;
 }
@@ -54,7 +51,7 @@ export function safeObjectFromEntries<T extends object = object>(
   );
 }
 
-export function indent(str: string, level: number = 0, reindent?: boolean) {
+export function indent(str: string, level = 0, reindent?: boolean) {
   return str.replace(reindent ? /\n\s*/g : /\n/g, '\n' + '  '.repeat(level));
 }
 

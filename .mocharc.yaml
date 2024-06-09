@@ -1,3 +1,5 @@
+require:
+  - 'source-map-support/register'
 spec:
-  tests/**/*.spec.ts
-require: node_modules/ts-node/register
+  - 'tests/**/*.spec.ts'
+package: './package.json'

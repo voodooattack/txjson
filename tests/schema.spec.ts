@@ -1,15 +1,18 @@
-import {use} from 'chai';
-import equalBytes from 'chai-bytes';
-import * as util from 'util';
-import {createSchema, parse, parseSchema} from '../src/index';
-import {safeObjectFromEntries} from '../src/util';
+import {use} from "chai";
+import equalBytes from "chai-bytes";
+import {createSchema, parse, parseSchema} from "../src/index";
+import {safeObjectFromEntries} from "../src/util";
 
-const {expect} = use(equalBytes);
+const { expect } = use(equalBytes);
 
-describe('TxJSON schema', function(this: Mocha.Suite) {
+describe("TxJSON schema", function (this: Mocha.Suite) {
   class Test {
-    constructor(public a: number, public b: string, ...extra: any[]) {
-      Object.assign(this, {extra});
+    constructor(
+      public a: number,
+      public b: string,
+      ...extra: any[]
+    ) {
+      Object.assign(this, { extra });
     }
   }
   class Dummy {}
@@ -34,17 +37,17 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
   const subSchema = createSchema({
     classes: {
       Test,
-      Dummy,
+      Dummy
     },
     prototypes: {
-      Dummy,
+      Dummy
     },
     deserializers: {
       ExternalRef: (acc) =>
-        'externally_referenced_type: ' + JSON.stringify(acc.rawValue),
-    },
+        "externally_referenced_type: " + JSON.stringify(acc.rawValue)
+    }
   });
-  it('can parse schema', function() {
+  it("can parse schema", function () {
     const schema = parseSchema(schemaStr, subSchema);
     const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13] = parse(
       `[
@@ -66,71 +69,71 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
         W 2,
         Z "ext",
       ]`,
-      schema,
+      schema
     );
     expect(r1).to.equal(123n);
     expect(r2).to.equal(null);
-    expect(r3).to.equal('aaa');
-    expect(r4).to.deep.equal([1, 'aaa']);
+    expect(r3).to.equal("aaa");
+    expect(r4).to.deep.equal([1, "aaa"]);
     expect(r5).to.equal(123);
     expect(r6).to.deep.equal({
       a: 1,
-      b: 'test',
-      c: undefined,
+      b: "test",
+      c: undefined
     });
     expect(r7).to.deep.equal({
       a: null,
-      b: 'x',
-      c: undefined,
+      b: "x",
+      c: undefined
     });
     expect(r8).to.be.instanceOf(Test);
-    expect(r8).to.deep.equal(new Test(1, '3'));
+    expect(r8).to.deep.equal(new Test(1, "3"));
     expect(r9).to.be.instanceOf(Dummy);
     expect(r9).to.deep.equal(new Dummy());
     expect(r10).to.be.instanceOf(Dummy);
     expect(r10).to.deep.equal({
       a: 1,
       b: 2,
-      c: 3,
+      c: 3
     });
     expect(r11).to.deep.equal([
-      'test',
+      "test",
       1,
       true,
       undefined,
-      'externally_referenced_type: 0',
+      "externally_referenced_type: 0"
     ]);
     expect(r12).to.equal(2);
     expect(r13).to.equal('externally_referenced_type: "ext"');
   });
 
-  it('can validate schema', function() {
+  it("can validate schema", function () {
     const schema = parseSchema(schemaStr, subSchema);
     expect(() =>
-      parse(`D {a: "invalid", b: "aaa", c: 1 }`, schema, '/src/aaa/test.txjson'),
+      parse(`D {a: "invalid", b: "aaa", c: 1 }`, schema, "/src/aaa/test.txjson")
     ).to.throw(
-      'expected object with signature `object { \"a\": X, \"b\": string, \"c\": undefined }',
+      'expected object with signature `object { "a": X, "b": string, "c": undefined }'
     );
     expect(() => parse(`X YYY`, schema)).to.throw('unknown type "YYY"');
     expect(() => parse(`Test(1, "2", 3)`, schema)).to.throw(
-      'expected arguments with signature `[int, string]`',
+      "expected arguments with signature `[int, string]`"
     );
     expect(() => parse(`Dummy(1, "2", 3)`, schema)).to.throw(
-      `expected arguments with signature \`[]\``,
+      `expected arguments with signature \`[]\``
     );
     expect(() => parse(`Dummy...`, schema)).to.throw(
-      'syntax error at 1:8, mismatched input \'<EOF>\' expecting \'{\'',
+      "syntax error at 1:8, mismatched input '<EOF>' expecting '{'"
     );
     expect(() => parse(`Dummy... {}`)).to.throw('unknown prototype "Dummy"');
     expect(() => parse(`DoesNotExist(1, "2", 3)`, schema)).to.throw(
-      'unknown class "DoesNotExist"',
+      'unknown class "DoesNotExist"'
     );
     expect(() => parse(`W 8`, schema)).to.throw(
-      'expected: `number(1)|number(2)|number(3)`',
+      "expected: `number(1)|number(2)|number(3)`"
     );
   });
 
-  it('can validate document root', function() {
+  it("can validate document root", function () {
     const schema = parseSchema(`
       schema {
         ':document': arrayOf int,
@@ -138,14 +141,14 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
     `);
     expect(parse(`[1, 2, 3]`, schema)).to.deep.eq([1, 2, 3]);
     expect(() => parse(`[1.2, 2, 3]`, schema)).to.throw(
-      'non-integer value found for type "int"',
+      'non-integer value found for type "int"'
     );
     expect(() => parse(`{}`, schema)).to.throw(
-      'expected array of type `int[]`',
+      "expected array of type `int[]`"
     );
   });
 
-  it('can validate a practical example', function() {
+  it("can validate a practical example", function () {
     const schema = parseSchema(
       `
       schema {
@@ -192,26 +195,26 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
             return {
               PLACE_DESERIALIZED: true,
               ...safeObjectFromEntries(
-                acc.children.map((c) => [c.key!, c.value]),
-              ),
+                acc.children.map((c) => [c.key!, c.value])
+              )
             };
-          },
+          }
         },
         classes: {
           Point: class Point {
-            type = 'Point';
+            type = "Point";
             coordinates: [number, number];
             constructor(x: number, y: number) {
               this.coordinates = [x, y];
             }
-          },
-        },
+          }
+        }
       }),
-      'places.schema.txson',
+      "places.schema.txson"
     );
     expect(parse(`[]`)).to.deep.eq([]);
     expect(() => parse(`{}`, schema)).to.throw(
-      'expected array of type `Place[]`',
+      "expected array of type `Place[]`"
     );
     expect(
       parse(
@@ -225,91 +228,92 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
            address: "123 Afterlife St.",
            tags: ["great amenities", "free wifi"],
         }]`,
-        schema,
-      ),
+        schema
+      )
     ).to.deep.eq([
       {
         PLACE_DESERIALIZED: true,
         id: 0,
-        name: 'The good place',
-        cat: 'accomodation',
-        status: 'published',
+        name: "The good place",
+        cat: "accomodation",
+        status: "published",
         description: null,
         coords: {
-          type: 'Point',
-          coordinates: [10, 10],
+          type: "Point",
+          coordinates: [10, 10]
         },
-        address: '123 Afterlife St.',
-        tags: ['great amenities', 'free wifi'],
-      },
+        address: "123 Afterlife St.",
+        tags: ["great amenities", "free wifi"]
+      }
     ]);
   });
 
-  it('errors on invalid schema', function() {
+  it("errors on invalid schema", function () {
     expect(() =>
-      parseSchema(`schema []`, undefined, 'test.schema.txjson'),
+      parseSchema(`schema []`, undefined, "test.schema.txjson")
     ).to.throw(
-      'test.schema.txjson(1,0): error in expression `schema []`: invalid schema: expected an object with a signature of `schema { [typeName]: type, ... }`',
+      "test.schema.txjson(1,0): error in expression `schema []`: invalid schema: expected an object with a signature of `schema { [typeName]: type, ... }`"
     );
     expect(() => parseSchema(`{}`, undefined)).to.throw(
-      'invalid input, document root must be of type `schema`',
+      "invalid input, document root must be of type `schema`"
     );
     expect(() => parseSchema(`schema undefined`, undefined)).to.throw(
-      'invalid schema: expected an object with a signature of `schema { [typeName]: type, ... }`',
+      "invalid schema: expected an object with a signature of `schema { [typeName]: type, ... }`"
     );
     expect(() => parseSchema(`schema 1`, undefined)).to.throw(
-      'invalid schema: expected an object with a signature of `schema { [typeName]: type, ... }`',
+      "invalid schema: expected an object with a signature of `schema { [typeName]: type, ... }`"
     );
     expect(() => parseSchema(`schema {x: [maybe int]}`, undefined)).to.throw(
-      `unexpected array literal`,
+      `unexpected array literal`
     );
     expect(() => parseSchema(`[schema {x: maybe null}]`, undefined)).to.throw(
-      'nested schemas are not supported',
+      "nested schemas are not supported"
     );
     expect(() =>
-      parseSchema(`schema { x: schema {x: int} }`, undefined),
-    ).to.throw('nested schemas are not supported');
+      parseSchema(`schema { x: schema {x: int} }`, undefined)
+    ).to.throw("nested schemas are not supported");
     expect(() => parseSchema(`[schema {x: {a: int}}]`, undefined)).to.throw(
-      'unexpected object literal',
+      "unexpected object literal"
     );
     expect(() => parseSchema(`schema { x: class 1 }`, undefined)).to.throw(
-      'class only accepts an optional array of arguments',
+      "class only accepts an optional array of arguments"
     );
     expect(() => parseSchema(`schema { x: proto 1 }`, undefined)).to.throw(
-      'proto only accepts an optional key-value mapping',
+      "proto only accepts an optional key-value mapping"
     );
     expect(() => parseSchema(`schema { x: class {} }`, undefined)).to.throw(
-      'class only accepts an optional array of arguments',
+      "class only accepts an optional array of arguments"
     );
     expect(() =>
-      parseSchema(`schema { x: arrayOf class [] }`, undefined),
+      parseSchema(`schema { x: arrayOf class [] }`, undefined)
     ).to.throw(
-      'classes may only be defined at the schema level or as part of a schema-level `oneOf` clause',
+      "classes may only be defined at the schema level or as part of a schema-level `oneOf` clause"
     );
     expect(() =>
-      parseSchema(`schema { x: oneOf [class [], int] }`, undefined),
+      parseSchema(`schema { x: oneOf [class [], int] }`, undefined)
     ).to.throw(
-      'unexpected "int" in `oneOf [class, ...]`, expected: class|proto|object',
+      'unexpected "int" in `oneOf [class, ...]`, expected: class|proto|object'
     );
     expect(() =>
-      parseSchema(`schema { ':document': class }`, undefined),
-    ).to.throw('invalid class name');
+      parseSchema(`schema { ':document': class }`, undefined)
+    ).to.throw("invalid class name");
     expect(() =>
-      parseSchema(`schema { x: arrayOf proto {} }`, undefined),
+      parseSchema(`schema { x: arrayOf proto {} }`, undefined)
     ).to.throw(
-      'prototypes may only be defined at the schema level or as part of a schema-level `oneOf` clause',
+      "prototypes may only be defined at the schema level or as part of a schema-level `oneOf` clause"
     );
     expect(() =>
-      parseSchema(`schema { x: oneOf [proto {}, int] }`, undefined),
+      parseSchema(`schema { x: oneOf [proto {}, int] }`, undefined)
     ).to.throw(
-      'unexpected "int" in `oneOf [proto, ...]`, expected: class|proto|object',
+      'unexpected "int" in `oneOf [proto, ...]`, expected: class|proto|object'
     );
     expect(() =>
-      parseSchema(`schema { ':document': proto {} }`, undefined),
-    ).to.throw('invalid class name');
+      parseSchema(`schema { ':document': proto {} }`, undefined)
+    ).to.throw("invalid class name");
   });
-  it('complex', function() {
-    const schema = parseSchema(`
+  it("complex", function () {
+    const schema = parseSchema(
+      `
     schema {
       ':document': arrayOf TestCase,
       TestCase: oneOf [TestSQL, TestExpr],
@@ -418,20 +422,23 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
             end: int,
           },
         }
-    }`, createSchema({
-      deserializers: {
-        UNDEFINED: () => `UNDEFINED`,
-        NULL: () => `NULL`,
-        TYPEID: () => `TYPEID`,
-        STRING: () => `STRING`,
-        STRUCT: (acc) => ({STRUCT: acc.children[0].value}),
-        VARIANT: (acc) => ({VARIANT: acc.children[0].value}),
-        INTERVAL: (acc) => ({INTERVAL: acc.children[0].value}),
-        INT: (acc) => ({'INT': acc.rawValue}),
-        ValueError: () => `ValueError`,
-      },
-    }));
-    const res = parse(`[
+    }`,
+      createSchema({
+        deserializers: {
+          UNDEFINED: () => `UNDEFINED`,
+          NULL: () => `NULL`,
+          TYPEID: () => `TYPEID`,
+          STRING: () => `STRING`,
+          STRUCT: (acc) => ({ STRUCT: acc.children[0].value }),
+          VARIANT: (acc) => ({ VARIANT: acc.children[0].value }),
+          INTERVAL: (acc) => ({ INTERVAL: acc.children[0].value }),
+          INT: (acc) => ({ INT: acc.rawValue }),
+          ValueError: () => `ValueError`
+        }
+      })
+    );
+    const res = parse(
+      `[
       {
         "description": "Math",
         "mode": "spreadsheet",
@@ -446,48 +453,58 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
             VARIANT INTERVAL "P1M15D"
           ],
         ],
-      }
-    ]`, schema);
-    console.log(util.inspect(res, {
-      depth: Infinity,
-    }));
-    expect(res).to.deep.equal([{
-      'description': 'Math',
-      'mode': 'spreadsheet',
-      'query': [
-        'abc',
-        'cde',
-      ],
-      'results': [
-        [
-          {VARIANT: {STRUCT: {'x': {INT: '1'}, 'y': {INT: '2'}}}},
-          'NULL',
-          {VARIANT: {INTERVAL: 'P1M15D'}},
+      }, {
+        "description": "Math 2",
+        "mode": "spreadsheet",
+        "query": [
         ],
-      ],
-    }]);
+        "results": [
+        ],
+      }
+    ]`,
+      schema
+    );
+    expect(res).to.deep.equal([
+      {
+        description: "Math",
+        mode: "spreadsheet",
+        query: ["abc", "cde"],
+        results: [
+          [
+            { VARIANT: { STRUCT: { x: { INT: "1" }, y: { INT: "2" } } } },
+            "NULL",
+            { VARIANT: { INTERVAL: "P1M15D" } }
+          ]
+        ]
+      }, {
+        description: "Math 2",
+        mode: "spreadsheet",
+        query: [],
+        results: []
+      }
+    ]);
   });
-  it('misc', function() {
+  it("misc", function () {
     expect(() =>
       parse(
         `X ["aaa", {"x": int 0, y: []}]`,
         parseSchema(`
       schema { X: arrayOf [string, oneOf [object, arrayOf object]] }
-    `),
-      ),
+    `)
+      )
     ).to.not.throw();
     parse(
       `X [Y "zz", Z 2]`,
       parseSchema(`
         schema { X: arrayOf oneOf [Y, Z], Y: string, Z: number }
-    `),
+    `)
     );
     expect(() =>
       parse(
         `X [Y "zz", Z 2]`,
         parseSchema(`
-        schema { X: arrayOf oneOf [Y, Z], Y: string, Z: number }`),
-      ),
+        schema { X: arrayOf oneOf [Y, Z], Y: string, Z: number }`)
+      )
     ).to.not.throw();
     expect(
       parse(
@@ -496,12 +513,12 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
           `schema {X: oneOf [int, string]}`,
           createSchema({
             deserializers: {
-              X: () => 'override',
-            },
-          }),
-        ),
-      ),
-    ).to.deep.equal(['override', 'override']);
+              X: () => "override"
+            }
+          })
+        )
+      )
+    ).to.deep.equal(["override", "override"]);
     expect(
       parse(
         '[X [1, "2"], X [2, "3"], Y [3, "4"]]',
@@ -509,12 +526,12 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
           `schema {X: arrayOf [int, string], Y: X}`,
           createSchema({
             deserializers: {
-              Y: () => 'override',
-            },
-          }),
-        ),
-      ),
-    ).to.deep.equal([[1, '2'], [2, '3'], 'override']);
+              Y: () => "override"
+            }
+          })
+        )
+      )
+    ).to.deep.equal([[1, "2"], [2, "3"], "override"]);
     expect(
       parse(
         'VARIANT STRUCT ["STRUCT(x INTEGER, y INTEGER)", {"x": INT "1", "y": INT "2"}]',
@@ -526,19 +543,19 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
             VARIANT: ANY,
           }`,
           createSchema({
-            deserializers: {},
-          }),
-        ),
-      ),
+            deserializers: {}
+          })
+        )
+      )
     ).to.deep.equal([
-      'STRUCT(x INTEGER, y INTEGER)',
+      "STRUCT(x INTEGER, y INTEGER)",
       {
-        x: '1',
-        y: '2',
-      },
+        x: "1",
+        y: "2"
+      }
     ]);
   });
-  it('misc 2', function() {
+  it("misc 2", function () {
     expect(
       parse(
         `[
@@ -561,24 +578,24 @@ describe('TxJSON schema', function(this: Mocha.Suite) {
               variant: (acc) =>
                 `variant ${JSON.stringify(acc.children[0].value)}`,
               c: (acc) => `${acc.children[0].value}`,
-              X: () => 'X',
+              X: () => "X"
             },
             classes: {
               Y: class Y {
                 get [Symbol.toStringTag]() {
-                  return 'Y';
+                  return "Y";
                 }
-              },
-            },
-          }),
-        ),
-      ),
+              }
+            }
+          })
+        )
+      )
     ).to.deep.equal([
-      'variant 1',
+      "variant 1",
       'variant "x"',
       'variant "X"',
-      'variant {}',
-      'variant ["X","X",{"o":"X","p":12,"q":12.2}]',
+      "variant {}",
+      'variant ["X","X",{"o":"X","p":12,"q":12.2}]'
     ]);
   });
 });

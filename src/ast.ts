@@ -1,6 +1,11 @@
-import type {ParserRuleContext} from 'antlr4ts/ParserRuleContext';
-import type {TxJSONListener} from './parser/TxJSONListener';
+import type {ErrorNode, ParserRuleContext} from "antlr4ng";
+import type {TxJSONListener} from "./parser/TxJSONListener";
 import type {
+  ArrContext,
+  BignumberContext,
+  CallContext,
+  KeyContext,
+  NumberContext,
   ObjContext,
   PairContext,
   RootContext,
@@ -10,18 +15,20 @@ import type {
   TCtorContext,
   TNullContext,
   TNumberContext,
+  TObjectContext,
   TProtoContext,
   TRegExpContext,
   TStringContext,
   TUndefinedContext,
   TValueContext,
   TxJSONParser,
-} from './parser/TxJSONParser';
-import type {ActiveSchema, Schema, ValueAccessor} from './schema';
-import {NodeKind} from './schema';
-import {ValueError, getExpression} from './util';
+  ValueContext
+} from "./parser/TxJSONParser";
+import type {ActiveSchema, Schema, ValueAccessor} from "./schema";
+import {NodeKind} from "./schema";
+import {ValueError, getExpression} from "./util";
 
-const emptyValue = Symbol.for('TXJSON_EMPTY');
+const emptyValue = Symbol.for("TXJSON_EMPTY");
 
 abstract class ASTNode implements ValueAccessor {
   _parent?: ValueAccessor;
@@ -30,7 +37,7 @@ abstract class ASTNode implements ValueAccessor {
     public rule: ParserRuleContext,
     public schema: ActiveSchema,
     private _typeName: string,
-    private _rawValue?: any,
+    private _rawValue?: any
   ) {}
   get expression() {
     return getExpression(this);
@@ -41,8 +48,8 @@ abstract class ASTNode implements ValueAccessor {
   set typeName(name: string) {
     if (this.kind !== NodeKind.Typed) {
       if (this.parent) {
-        const pIdx = this.parent?.children.indexOf(this);
-        if (typeof pIdx !== 'undefined' && pIdx !== -1) {
+        const pIdx = this.parent.children.indexOf(this);
+        if (typeof pIdx !== "undefined" && pIdx !== -1) {
           const n = new TypedValueNode(this.rule, this.schema, name);
           n.child = this;
           this.parent.children[pIdx] = n;
@@ -89,8 +96,8 @@ abstract class ASTNode implements ValueAccessor {
   public validate(): void {
     if (
       !(
-        this.typeName.startsWith(':') ||
-        '*' in this.schema.validators ||
+        this.typeName.startsWith(":") ||
+        "*" in this.schema.validators ||
         this.typeName in this.schema.classes ||
         this.typeName in this.schema.prototypes ||
         this.typeName in this.schema.deserializers ||
@@ -99,11 +106,11 @@ abstract class ASTNode implements ValueAccessor {
     ) {
       throw new ValueError(
         this,
-        `unknown type ${JSON.stringify(this.typeName)}`,
+        `unknown type ${JSON.stringify(this.typeName)}`
       );
     }
     const e = (
-      this.schema.validators[this.typeName] ?? this.schema.validators['*']
+      this.schema.validators[this.typeName] ?? this.schema.validators["*"]
     )?.(this);
     if (e) throw e;
   }
@@ -141,11 +148,13 @@ abstract class CompoundNode extends ASTNode {
     return this.children.map((c) => c.rawValue);
   }
   public override preprocess(): void {
-    this.children.forEach((c) => c.preprocess());
+    this.children.forEach((c) => {
+      c.preprocess();
+    });
   }
   public override validate(): void {
     for (const child of this.children) {
-      child.validate?.();
+      child.validate();
     }
     super.validate();
   }
@@ -162,7 +171,7 @@ class PrimitiveNode extends ASTNode {
     rule: ParserRuleContext,
     schema: ActiveSchema,
     typeName: string,
-    rawValue: number | string | boolean | null | undefined | bigint | RegExp,
+    rawValue: number | string | boolean | null | undefined | bigint | RegExp
   ) {
     super(rule, schema, typeName, rawValue);
   }
@@ -170,21 +179,19 @@ class PrimitiveNode extends ASTNode {
     return (
       (
         this.schema.deserializers[this.typeName] ??
-        this.schema.deserializers['*']
+        this.schema.deserializers["*"]
       )?.(this) ?? this.rawValue
     );
   }
   public preprocess(): void {
-    this.schema.preprocessors[this.typeName]?.(this);
+    if (this.schema.preprocessors[this.typeName])
+      this.schema.preprocessors[this.typeName](this);
   }
 }
 
 class ArrayNode extends CompoundNode {
-  constructor(
-    rule: ParserRuleContext,
-    schema: ActiveSchema,
-  ) {
-    super(rule, schema, ':array');
+  constructor(rule: ParserRuleContext, schema: ActiveSchema) {
+    super(rule, schema, ":array");
   }
   public get kind() {
     return NodeKind.Array;
@@ -204,9 +211,9 @@ class PairNode extends SimpleNode {
   constructor(
     rule: ParserRuleContext,
     schema: ActiveSchema,
-    private _key: string,
+    private _key: string
   ) {
-    super(rule, schema, ':pair');
+    super(rule, schema, ":pair");
   }
   public get key(): string {
     return this._key;
@@ -220,11 +227,8 @@ class PairNode extends SimpleNode {
 }
 
 class ObjectNode extends CompoundNode {
-  constructor(
-    rule: ParserRuleContext,
-    schema: ActiveSchema,
-  ) {
-    super(rule, schema, ':object');
+  constructor(rule: ParserRuleContext, schema: ActiveSchema) {
+    super(rule, schema, ":object");
   }
   public get kind(): NodeKind {
     return NodeKind.Object;
@@ -232,12 +236,12 @@ class ObjectNode extends CompoundNode {
   public children: PairNode[] = [];
   protected override getValue(): any {
     return this.children.reduce((p, n) => {
-      return Object.assign(p, {[n.key]: n.value});
+      return Object.assign(p, { [n.key]: n.value });
     }, Object.create(null));
   }
   get rawValue(): any {
     return this.children.reduce((p, n) => {
-      return Object.assign(p, {[n.key]: n.rawValue});
+      return Object.assign(p, { [n.key]: n.rawValue });
     }, Object.create(null));
   }
 }
@@ -246,33 +250,30 @@ class TypedValueNode extends SimpleNode {
   public get kind() {
     return NodeKind.Typed;
   }
-  constructor(
-    rule: ParserRuleContext,
-    schema: ActiveSchema,
-    typeName: string,
-  ) {
+  constructor(rule: ParserRuleContext, schema: ActiveSchema, typeName: string) {
     super(rule, schema, typeName);
   }
   get rawValue(): any {
     return this.child?.rawValue;
   }
   public preprocess(): void {
-    this.schema.preprocessors[this.typeName]?.(this);
+    if (this.schema.preprocessors[this.typeName])
+      this.schema.preprocessors[this.typeName](this);
     super.preprocess();
   }
   protected override getValue(): any {
     const {
-      deserializers = Object.create(null) as Schema['deserializers'],
-      validators = Object.create(null) as Schema['validators'],
+      deserializers = Object.create(null) as Schema["deserializers"],
+      validators = Object.create(null) as Schema["validators"]
     } = this.schema;
     if (this.typeName in deserializers || this.typeName in validators) {
       if (deserializers[this.typeName] !== undefined) {
         return deserializers[this.typeName]!(this);
       }
       return this.child?.value;
-    } else if ('*' in deserializers) {
-      return deserializers['*']!(this);
-    } else if (this.typeName.startsWith(':')) {
+    } else if ("*" in deserializers) {
+      return deserializers["*"]!(this);
+    } else if (this.typeName.startsWith(":")) {
       return this.child?.value;
     }
     throw new ValueError(this, `unknown type ${JSON.stringify(this.typeName)}`);
@@ -286,32 +287,32 @@ class ProtoConstructionNode extends SimpleNode {
   constructor(
     rule: ParserRuleContext,
     public schema: ActiveSchema,
-    typeName: string,
+    typeName: string
   ) {
     super(rule, schema, typeName);
   }
   public override validate() {
-    const {prototypes = Object.create(null)} = this.schema;
+    const { prototypes = Object.create(null) } = this.schema;
     if (!(this.typeName in prototypes)) {
       throw new ValueError(
         this,
-        `unknown prototype ${JSON.stringify(this.typeName)}`,
+        `unknown prototype ${JSON.stringify(this.typeName)}`
       );
     }
     super.validate();
   }
   protected override getValue(): any {
-    const {prototypes = Object.create(null)} = this.schema;
+    const { prototypes = Object.create(null) } = this.schema;
     if (this.typeName in prototypes) {
       const childVal = this.child?.value;
       return Object.assign(
         Object.create(prototypes[this.typeName].prototype),
-        childVal ?? {},
+        childVal ?? {}
       );
     }
     throw new ValueError(
       this,
-      `unknown prototype ${JSON.stringify(this.typeName)}`,
+      `unknown prototype ${JSON.stringify(this.typeName)}`
     );
   }
 }
@@ -323,22 +324,22 @@ class CtorCallValueNode extends CompoundNode {
   constructor(
     rule: ParserRuleContext,
     public schema: ActiveSchema,
-    typeName: string,
+    typeName: string
   ) {
     super(rule, schema, typeName);
   }
   public override validate() {
-    const {classes = Object.create(null)} = this.schema;
+    const { classes = Object.create(null) } = this.schema;
     if (!(this.typeName in classes)) {
       throw new ValueError(
         this,
-        `unknown class ${JSON.stringify(this.typeName)}`,
+        `unknown class ${JSON.stringify(this.typeName)}`
       );
     }
     super.validate();
   }
   protected override getValue(): any {
-    const {classes = Object.create(null)} = this.schema;
+    const { classes = Object.create(null) } = this.schema;
     if (this.typeName in classes) {
       const [args] = this.children;
       const val = args.children.map((c) => c.value);
@@ -346,7 +347,7 @@ class CtorCallValueNode extends CompoundNode {
     }
     throw new ValueError(
       this,
-      `unknown class ${JSON.stringify(this.typeName)}`,
+      `unknown class ${JSON.stringify(this.typeName)}`
     );
   }
 }
@@ -363,8 +364,8 @@ export class TxListener implements TxJSONListener {
     schema: Partial<Schema> = {
       classes: {},
       deserializers: {},
-      validators: {},
-    },
+      validators: {}
+    }
   ) {
     if (!schema.classes) schema.classes = {};
     if (!schema.deserializers) schema.deserializers = {};
@@ -373,14 +374,33 @@ export class TxListener implements TxJSONListener {
     this.schema.classes = Object.assign(Object.create(null), schema.classes);
     this.schema.deserializers = Object.assign(
       Object.create(null),
-      schema.deserializers,
+      schema.deserializers
     );
     this.schema.validators = Object.assign(
       Object.create(null),
-      schema.validators,
+      schema.validators
     );
     this.schema.parser = parser;
   }
+  enterKey?: ((ctx: KeyContext) => void) | undefined;
+  exitKey?: ((ctx: KeyContext) => void) | undefined;
+  enterTObject?: ((ctx: TObjectContext) => void) | undefined;
+  exitTObject?: ((ctx: TObjectContext) => void) | undefined;
+  enterTRegExp?: ((ctx: TRegExpContext) => void) | undefined;
+  enterValue?: ((ctx: ValueContext) => void) | undefined;
+  exitValue?: ((ctx: ValueContext) => void) | undefined;
+  enterCall?: ((ctx: CallContext) => void) | undefined;
+  exitCall?: ((ctx: CallContext) => void) | undefined;
+  enterArr?: ((ctx: ArrContext) => void) | undefined;
+  exitArr?: ((ctx: ArrContext) => void) | undefined;
+  enterNumber?: ((ctx: NumberContext) => void) | undefined;
+  exitNumber?: ((ctx: NumberContext) => void) | undefined;
+  enterBignumber?: ((ctx: BignumberContext) => void) | undefined;
+  exitBignumber?: ((ctx: BignumberContext) => void) | undefined;
+
+  visitErrorNode(node: ErrorNode): void {}
+  enterEveryRule(node: ParserRuleContext): void {}
+  exitEveryRule(node: ParserRuleContext): void {}
 
   get nodes() {
     return this.stack[this.stack.length - 1];
@@ -400,7 +420,7 @@ export class TxListener implements TxJSONListener {
       if (!this.nodes.length && node instanceof TypedValueNode) {
         this.addNode(
           ctx,
-          new PrimitiveNode(ctx, this.schema, ':undefined', undefined),
+          new PrimitiveNode(ctx, this.schema, ":undefined", undefined)
         );
       }
       node.child = this.stack.pop()?.[0];
@@ -427,10 +447,10 @@ export class TxListener implements TxJSONListener {
   exitRoot(ctx: RootContext) {
     this.root = this.endNode(
       ctx,
-      new TypedValueNode(ctx, this.schema, ':document'),
+      new TypedValueNode(ctx, this.schema, ":document")
     );
-    this.root.preprocess?.();
-    this.root.validate?.();
+    this.root.preprocess();
+    this.root.validate();
   }
 
   enterTArray() {
@@ -450,7 +470,7 @@ export class TxListener implements TxJSONListener {
     this.endNode(ctx, new ArrayNode(ctx, this.schema));
     this.endNode(
       ctx,
-      new CtorCallValueNode(ctx, this.schema, ctx.IDENTIFIER().text),
+      new CtorCallValueNode(ctx, this.schema, ctx.IDENTIFIER().getText())
     );
   }
 
@@ -469,7 +489,7 @@ export class TxListener implements TxJSONListener {
   exitTValue(ctx: TValueContext) {
     this.endNode(
       ctx,
-      new TypedValueNode(ctx, this.schema, ctx.IDENTIFIER().text!),
+      new TypedValueNode(ctx, this.schema, ctx.IDENTIFIER().getText())
     );
   }
 
@@ -480,7 +500,7 @@ export class TxListener implements TxJSONListener {
   exitTProto(ctx: TProtoContext) {
     this.endNode(
       ctx,
-      new ProtoConstructionNode(ctx, this.schema, ctx.IDENTIFIER().text!),
+      new ProtoConstructionNode(ctx, this.schema, ctx.IDENTIFIER().getText())
     );
   }
 
@@ -491,8 +511,9 @@ export class TxListener implements TxJSONListener {
   exitPair(ctx: PairContext) {
     let text = ctx
       .key()
-      .text.replace(/^(['"])?(.*)\1$/, '"$2"')
-      .replace(/\\\r?\n/gm, '');
+      .getText()
+      .replace(/^(['"])?(.*)\1$/, '"$2"')
+      .replace(/\\\r?\n/gm, "");
     text = JSON.parse(text);
     this.endNode(ctx, new PairNode(ctx, this.schema, text));
   }
@@ -504,11 +525,12 @@ export class TxListener implements TxJSONListener {
   exitTString(ctx: TStringContext) {
     const text = ctx
       .STRING()
-      .text.replace(/^(['"])?(.*)\1$/, '"$2"')
-      .replace(/\\\r?\n/gm, '');
+      .getText()
+      .replace(/^(['"])?(.*)\1$/, '"$2"')
+      .replace(/\\\r?\n/gm, "");
     this.endNode(
       ctx,
-      new PrimitiveNode(ctx, this.schema, ':string', JSON.parse(text)),
+      new PrimitiveNode(ctx, this.schema, ":string", JSON.parse(text))
     );
   }
 
@@ -519,7 +541,7 @@ export class TxListener implements TxJSONListener {
   exitTBoolean(ctx: TBooleanContext) {
     this.endNode(
       ctx,
-      new PrimitiveNode(ctx, this.schema, ':boolean', ctx.text === 'true'),
+      new PrimitiveNode(ctx, this.schema, ":boolean", ctx.getText() === "true")
     );
   }
 
@@ -528,7 +550,7 @@ export class TxListener implements TxJSONListener {
   }
 
   exitTNull(ctx: TNullContext) {
-    this.endNode(ctx, new PrimitiveNode(ctx, this.schema, ':null', null));
+    this.endNode(ctx, new PrimitiveNode(ctx, this.schema, ":null", null));
   }
 
   enterTUndefined() {
@@ -538,7 +560,7 @@ export class TxListener implements TxJSONListener {
   exitTUndefined(ctx: TUndefinedContext) {
     this.endNode(
       ctx,
-      new PrimitiveNode(ctx, this.schema, ':undefined', undefined),
+      new PrimitiveNode(ctx, this.schema, ":undefined", undefined)
     );
   }
 
@@ -549,7 +571,7 @@ export class TxListener implements TxJSONListener {
   exitTNumber(ctx: TNumberContext) {
     this.endNode(
       ctx,
-      new PrimitiveNode(ctx, this.schema, ':number', parseFloat(ctx.text)),
+      new PrimitiveNode(ctx, this.schema, ":number", parseFloat(ctx.getText()))
     );
   }
 
@@ -563,17 +585,17 @@ export class TxListener implements TxJSONListener {
       new PrimitiveNode(
         ctx,
         this.schema,
-        ':bigint',
-        BigInt(ctx.text.replace(/n$/, '')),
-      ),
+        ":bigint",
+        BigInt(ctx.getText().replace(/n$/, ""))
+      )
     );
   }
 
   exitTRegExp(ctx: TRegExpContext) {
-    const [, exp, flags] = ctx.text.match(/^\/(.*)\/(\w+)*$/)!;
+    const [, exp, flags] = ctx.getText().match(/^\/(.*)\/(\w+)*$/)!;
     this.addNode(
       ctx,
-      new PrimitiveNode(ctx, this.schema, ':regexp', new RegExp(exp, flags)),
+      new PrimitiveNode(ctx, this.schema, ":regexp", new RegExp(exp, flags))
     );
   }
 }

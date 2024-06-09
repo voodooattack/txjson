@@ -1,7 +1,7 @@
 import {use} from 'chai';
 import equalBytes from 'chai-bytes';
 
-import {createSchema, parse} from '../src/index';
+import {createSchema, parse} from '../src/index.ts';
 
 const {expect} = use(equalBytes);
 
