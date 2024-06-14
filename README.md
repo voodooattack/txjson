@@ -78,7 +78,7 @@ $ npm -v && node -v
 v8.16.0
 ```
 
-During development, you must have a version of Java installed, this is required by `antlr4ts` for use in generating the parser.
+During development, you must have a version of Java installed, this is required by `antlr4ng` for use in generating the parser.
 
 ---
 
@@ -89,9 +89,6 @@ During development, you must have a version of Java installed, this is required 
   - [Table of contents](#table-of-contents)
   - [Getting Started](#getting-started)
   - [Installation](#installation)
-  - [Usage](#usage)
-    - [Running the tests](#running-the-tests)
-    - [Building a distribution version](#building-a-distribution-version)
   - [API](#api)
     - [parse](#parse)
     - [parseSchema](#parseSchema)
@@ -113,13 +110,6 @@ These instructions will get you a copy of the project up and running on your loc
 
 **BEFORE YOU INSTALL:** please read the [prerequisites](#prerequisites)
 
-Start with cloning this repo on your local machine:
-
-```sh
-$ git clone https://github.com/voodooattack/txjson.git
-$ cd txjson
-```
-
 To install and set up the library, run:
 
 ```sh
@@ -131,25 +121,6 @@ Or if you prefer using Yarn:
 ```sh
 $ yarn add txjson
 ```
-
----
-
-## Usage
-
-### Running the tests
-
-```sh
-$ npm test
-```
-
-### Building a distribution version
-
-```sh
-$ npm run build
-```
-
-This task will create a distribution version of the project
-inside your local `dist/` folder
 
 ---
 
@@ -182,7 +153,7 @@ Parses a TxJSON file and returns a JavaScript value.
 | `preprocessors` | {...} | A mapping of user preprocessors, these will run before any validation occurs. |
 | `meta` | {...} | A dictionary to store user metadata. |
 
-If no schema is supplied, this function will use the default schema.
+If no schema is supplied, this function will use the [default schema](#createSchema).
 
 `fileName?: string`: An optional file name to include in error messages.
 
@@ -285,11 +256,11 @@ function createSchema(
 ): Schema
 ```
 
-Creates a default schema with default types. (e.g `int`, `bigint`, `UInt8Array`, ...)
+Creates a new schema with default types. (e.g `int`, `bigint`, `UInt8Array`, ...)
 
 #### Arguments:
 
-`overrides`: A base schema. (optional) Pass this to override the defaults.
+`overrides`: (optional) Pass another schema to override the defaults.
 
 ---
 
