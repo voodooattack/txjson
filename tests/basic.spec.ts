@@ -1,6 +1,8 @@
 import {use} from 'chai';
 import equalBytes from 'chai-bytes';
 
+Error.stackTraceLimit = 1000;
+
 import {createSchema, parse} from '../src/index.ts';
 
 const {expect} = use(equalBytes);
@@ -41,9 +43,7 @@ describe('TxJSON parser', function(this: Mocha.Suite) {
   });
   it('can parse nested objects', function() {
     const value = parse(`{
-      "str": "string a\
-b\
-c",
+      "str": "string a\\\nb\\\nc",
       'n': 1,
       bool: true,
       arr: [1, 2, 3],

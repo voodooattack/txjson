@@ -623,6 +623,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/chai@npm:^4.3.16":
+  version: 4.3.16
+  resolution: "@types/chai@npm:4.3.16"
+  checksum: bb5f52d1b70534ed8b4bf74bd248add003ffe1156303802ea367331607c06b494da885ffbc2b674a66b4f90c9ee88759790a5f243879f6759f124f22328f5e95
+  languageName: node
+  linkType: hard
+
 "@types/clean-css@npm:*":
   version: 4.2.11
   resolution: "@types/clean-css@npm:4.2.11"
@@ -665,7 +672,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*":
+"@types/mocha@npm:^10.0.6":
+  version: 10.0.6
+  resolution: "@types/mocha@npm:10.0.6"
+  checksum: f7c836cf6cf27dc0f5970d262591b56f2a3caeaec8cfdc612c12e1cfbb207f601f710ece207e935164d4e3343b93be5054d0db5544f31f453b3923775d82099f
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:*, @types/node@npm:^20.14.2":
   version: 20.14.2
   resolution: "@types/node@npm:20.14.2"
   dependencies:
@@ -4205,6 +4219,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "txjson@workspace:."
   dependencies:
+    "@types/chai": ^4.3.16
+    "@types/mocha": ^10.0.6
+    "@types/node": ^20.14.2
     antlr4ng: ^3.0.4
     antlr4ng-cli: ^2.0.0
     chai: ^4.3.7

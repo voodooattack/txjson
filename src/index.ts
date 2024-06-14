@@ -1,5 +1,5 @@
 import {CharStream, CommonTokenStream, ParseTreeWalker} from "antlr4ng";
-import {TxJSONLexer} from "./parser/TxJSONLexer";
+import {Lexer} from "./parser/Lexer";
 
 import {TxListener} from "./ast";
 import {TxJSONParser} from "./parser/TxJSONParser";
@@ -22,7 +22,7 @@ export function parse<T = any>(
   const activeSchema = new Schema(schema);
   activeSchema.meta.fileName = fileName ?? schema.meta?.fileName;
   const stream = CharStream.fromString(document);
-  const lexer = new TxJSONLexer(stream);
+  const lexer = new Lexer(stream);
   const tokens = new CommonTokenStream(lexer);
   const parser = new TxJSONParser(tokens);
   const listener = new TxListener(parser, activeSchema);

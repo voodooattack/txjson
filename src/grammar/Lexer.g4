@@ -1,52 +1,7 @@
-grammar TxJSON
-  ;
-
-@header {
-  // @ts-nocheck
-}
-
-root: value? EOF;
-
-obj: '{' pair (',' pair)* ','? '}' | '{' '}';
-
-pair: key ':' value;
-
-key: STRING | IDENTIFIER | LITERAL | NUMERIC_LITERAL;
-
-typedValue
-  : IDENTIFIER value?    # tValue
-  | IDENTIFIER '...' obj # tProto
-  | IDENTIFIER call      # tCtor
-  ;
-
-basicValue
-  : STRING                   # tString
-  | number                   # tNumber
-  | bignumber                # tBigInt
-  | obj                      # tObject
-  | arr                      # tArray
-  | RegularExpressionLiteral # tRegExp
-  | 'true'                   # tBoolean
-  | 'false'                  # tBoolean
-  | 'null'                   # tNull
-  | 'undefined'              # tUndefined
-  ;
-
-value: basicValue | typedValue;
-
-call: '(' value (',' value)* ','? ')' | '(' ')';
-
-arr: '[' value (',' value)* ','? ']' | '[' ']';
-
-number: SYMBOL? ( NUMERIC_LITERAL | NUMBER);
-
-bignumber: SYMBOL? NUMBER 'n';
-
-RegularExpressionLiteral
-  : '/' RegularExpressionBody '/' RegularExpressionFlags
-  ;
 
 // Lexer
+
+lexer grammar Lexer;
 
 fragment RegularExpressionBody
   : RegularExpressionFirstChar RegularExpressionChar*
@@ -81,16 +36,35 @@ fragment RegularExpressionClassChar
   | RegularExpressionBackslashSequence
   ;
 
+RegularExpressionLiteral
+  : Slash RegularExpressionBody Slash RegularExpressionFlags
+  ;
+
 SINGLE_LINE_COMMENT: '//' .*? (NEWLINE | EOF) -> skip;
 
 MULTI_LINE_COMMENT: '/*' .*? '*/' -> skip;
-
-LITERAL: 'true' | 'false' | 'null' | 'undefined';
 
 STRING
   : '"' DOUBLE_QUOTE_CHAR* '"'
   | '\'' SINGLE_QUOTE_CHAR* '\''
   ;
+
+Colon: ':';
+OpenBrace: '{';
+CloseBrace: '}';
+OpenParen: '(';
+CloseParen: ')';
+OpenBracket: '[';
+CloseBracket: ']';
+Comma: ',';
+Spread: '...';
+Slash: '/';
+
+TRUE: 'true';
+FALSE: 'false';
+UNDEFINED: 'undefined';
+NULL: 'null';
+N: 'n';
 
 fragment DOUBLE_QUOTE_CHAR: ~["\\\r\n] | ESCAPE_SEQUENCE;
 
@@ -117,15 +91,15 @@ NUMBER
 
 NUMERIC_LITERAL: 'Infinity' | 'NaN';
 
-SYMBOL: '+' | '-';
+SIGN: '+' | '-';
 
 fragment HEX: [0-9a-fA-F];
 
 fragment INT: '0' | [1-9] [0-9]*;
 
-fragment BINT: '0n' | [1-9] [0-9]* 'n';
+BINT: '0n' | [1-9] [0-9]* N;
 
-fragment EXP: [Ee] SYMBOL? [0-9]*;
+fragment EXP: [Ee] SIGN? [0-9]*;
 
 IDENTIFIER: IDENTIFIER_START IDENTIFIER_PART*;
 

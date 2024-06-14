@@ -47,7 +47,7 @@
   "scripts": {
     "prepare": "nr build",
     "build": "nr build:parser && nr build:ts",
-    "build:parser": "antlr4ng -Dlanguage=TypeScript -Xexact-output-dir -o ./src/parser ./src/TxJSON.g4 && eslint src/parser --fix",
+    "build:parser": "antlr4ng -Dlanguage=TypeScript -Xexact-output-dir -o ./src/parser ./src/grammar/TxJSON.g4 ./src/grammar/Lexer.g4",
     "build:ts": "nr build:ts:cjs && nr build:ts:esm && nr build:ts:dts",
     "build:ts:cjs": "tsc -p tsconfig.cjs.json",
     "build:ts:esm": "tsc -p tsconfig.esm.json",
@@ -64,6 +64,9 @@
     "antlr4ng": "^3.0.4"
   },
   "devDependencies": {
+    "@types/chai": "^4.3.16",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.14.2",
     "antlr4ng-cli": "^2.0.0",
     "chai": "^4.3.7",
     "chai-bytes": "^0.1.2",
