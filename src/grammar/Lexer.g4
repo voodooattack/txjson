@@ -1,7 +1,9 @@
-
-// Lexer
-
 lexer grammar Lexer;
+
+tokens {
+  BQUOTE_CHARS,
+  BQUOTE_END
+}
 
 fragment RegularExpressionBody
   : RegularExpressionFirstChar RegularExpressionChar*
@@ -44,9 +46,15 @@ SINGLE_LINE_COMMENT: '//' .*? (NEWLINE | EOF) -> skip;
 
 MULTI_LINE_COMMENT: '/*' .*? '*/' -> skip;
 
+BQUOTE_START: Backtick -> pushMode(MODE_BQUOTE);
+
+DelimDQuote: DQuote -> skip;
+DelimSQuote: SQuote -> skip;
+
 STRING
-  : '"' DOUBLE_QUOTE_CHAR* '"'
-  | '\'' SINGLE_QUOTE_CHAR* '\''
+  : DelimDQuote DOUBLE_QUOTE_CHAR* DelimDQuote
+  | DelimSQuote SINGLE_QUOTE_CHAR* DelimSQuote
+  | BQUOTE_START BQUOTE_CHARS* BQUOTE_END
   ;
 
 Colon: ':';
@@ -59,16 +67,17 @@ CloseBracket: ']';
 Comma: ',';
 Spread: '...';
 Slash: '/';
-
+Backtick: '`';
+SQuote: '\'';
+DQuote: '"';
 TRUE: 'true';
 FALSE: 'false';
 UNDEFINED: 'undefined';
 NULL: 'null';
 N: 'n';
 
-fragment DOUBLE_QUOTE_CHAR: ~["\\\r\n] | ESCAPE_SEQUENCE;
-
-fragment SINGLE_QUOTE_CHAR: ~['\\\r\n] | ESCAPE_SEQUENCE;
+fragment DOUBLE_QUOTE_CHAR: ~["\r\n] | SKIP_CONTINUATION | ESCAPE_SEQUENCE;
+fragment SINGLE_QUOTE_CHAR: ~['\r\n] | SKIP_CONTINUATION | ESCAPE_SEQUENCE;
 
 fragment ESCAPE_SEQUENCE
   : '\\' (
@@ -123,7 +132,13 @@ fragment UNICODE_SEQUENCE: 'u' HEX HEX HEX HEX;
 
 fragment NEWLINE: '\r\n' | [\r\n\u2028\u2029];
 
+SKIP_CONTINUATION: NEWLINE '\\' -> skip;
+
 WS: [ \t\n\r\u00A0\uFEFF\u2003]+ -> channel(HIDDEN);
 
 // LEXER: Silence is golden
 ErrorCharacter: .;
+
+mode MODE_BQUOTE;
+BQUOTE_END: ~[\\] [`] -> type(BQUOTE_END), popMode;
+BQUOTE_CHARS: ~[`]+ -> type(BQUOTE_CHARS);

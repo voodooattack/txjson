@@ -523,11 +523,15 @@ export class TxListener implements TxJSONListener {
   }
 
   exitTString(ctx: TStringContext) {
-    const text = ctx
+    let text = ctx
       .STRING()
       .getText()
-      .replace(/^(['"])?(.*)\1$/, '"$2"')
-      .replace(/\\\r?\n/gm, "");
+      .trim()
+      .slice(1, -1)
+      .replace(/\\\r?\n/g, "")
+      .replace(/\r\n/g, "\\r\\n")
+      .replace(/\n/g, "\\n");
+    text = `"${text}"`;
     this.endNode(
       ctx,
       new PrimitiveNode(ctx, this.schema, ":string", JSON.parse(text))

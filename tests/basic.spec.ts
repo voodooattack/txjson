@@ -16,6 +16,8 @@ describe('TxJSON parser', function(this: Mocha.Suite) {
     expect(parse('float 123.5')).to.equal(123.5);
     expect(parse('bigint 1')).to.equal(1n);
     expect(parse('3n')).to.equal(3n);
+    expect(parse('"a"')).to.equal('a');
+    expect(parse('`a\nb`')).to.equal('a\nb');
     expect(parse('string "1"')).to.equal('1');
     expect(parse('/\\d+/g')).to.deep.equal(/\d+/g);
     expect(parse('boolean true')).to.equal(true);
@@ -43,7 +45,7 @@ describe('TxJSON parser', function(this: Mocha.Suite) {
   });
   it('can parse nested objects', function() {
     const value = parse(`{
-      "str": "string a\\\nb\\\nc",
+      "str": "xyz \\"a\\\nb\\\nc\\"",
       'n': 1,
       bool: true,
       arr: [1, 2, 3],
@@ -54,7 +56,7 @@ describe('TxJSON parser', function(this: Mocha.Suite) {
       "\u1234z": "vvvv",
       rx: /\\d+/gi
     }`);
-    expect(value.str).to.equal('string abc');
+    expect(value.str).to.equal('xyz "abc"');
     expect(value.n).to.equal(1);
     expect(value.bool).to.equal(true);
     expect(value.arr).to.deep.equal([1, 2, 3]);

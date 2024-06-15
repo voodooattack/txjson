@@ -4,6 +4,11 @@ options {
   tokenVocab = Lexer;
 }
 
+tokens {
+  BQuoteEnd,
+  BQuoteStart
+}
+
 @header {
   // @ts-nocheck
 }
@@ -17,9 +22,9 @@ pair: key Colon value;
 key: STRING | IDENTIFIER | TRUE | FALSE | UNDEFINED | NULL | NUMERIC_LITERAL;
 
 typedValue
-  : IDENTIFIER value?  # tValue
+  : IDENTIFIER value?     # tValue
   | IDENTIFIER Spread obj # tProto
-  | IDENTIFIER call    # tCtor
+  | IDENTIFIER call       # tCtor
 ;
 
 basicValue
