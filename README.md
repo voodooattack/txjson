@@ -13,6 +13,8 @@ Syntax:
   x: date "2001-01-01", // it can handle custom deserializers!
   y: 123n, // it can handle `BigInt` out of the box!
   z: /^I\sCAN\sPARSE\sREGEX$/im, // ...and also regular expressions!
+  backquote: `Hello
+World!`, // multi-line template strings are supported! (sans placeholders)
   w: undefined, // ...and even `undefined`!
 }
 ```
@@ -36,6 +38,7 @@ schema {
     // `maybe` makes the following type optional (e.g can be `undefined` or `null`)
     description: maybe string,
     coords: maybe oneOf [arrayOf Point, Point],
+    region: arrayOf Point,
     address: maybe string,
     phone: maybe string,
     // `tags` is a dynamic string array of any length.
