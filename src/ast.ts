@@ -519,7 +519,6 @@ export class TxListener implements TxJSONListener {
     const text = ctx.key().STRING()
       ? processStringLiteral(ctx.key().STRING()!.getText().slice(1, -1))
       : ctx.key().getText();
-    console.log({ raw: ctx.key().getText(), text });
     this.endNode(ctx, new PairNode(ctx, this.schema, text));
   }
 

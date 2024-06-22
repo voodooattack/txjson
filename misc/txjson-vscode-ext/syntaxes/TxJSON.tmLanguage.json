@@ -166,6 +166,27 @@
 				}
 			]
 		},
+		"stringBQuote": {
+			"begin": "[`]",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.string.template.begin.txjson" }
+			},
+			"end": "[`]",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.string.template.end.txjson" }
+			},
+			"name": "string.template.txjson",
+			"patterns": [
+				{
+					"match": "(?x:                # turn on extended mode\n                     \\\\                # a literal backslash\n                     (?:               # ...followed by...\n                       [\"\\\\/bfnrt]     # one of these characters\n                       |               # ...or...\n                       u               # a u\n                       [0-9a-fA-F]{4}  # and four hex digits\n                     )\n                   )",
+					"name": "constant.character.escape.txjson"
+				},
+				{
+					"match": "\\\\.",
+					"name": "invalid.illegal.unrecognized-string-escape.txjson"
+				}
+			]
+		},
 		"key": {
 			"name": "string.key.txjson",
 			"patterns": [
@@ -194,6 +215,7 @@
 				{ "include": "#number" },
 				{ "include": "#stringSingle" },
 				{ "include": "#stringDouble" },
+				{ "include": "#stringBQuote" },
 				{ "include": "#array" },
 				{ "include": "#object" }
 			]
