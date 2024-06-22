@@ -4,11 +4,6 @@ options {
   tokenVocab = Lexer;
 }
 
-tokens {
-  BQuoteEnd,
-  BQuoteStart
-}
-
 @header {
   // @ts-nocheck
 }
@@ -32,6 +27,7 @@ basicValue
   | TRUE                     # tBoolean
   | FALSE                    # tBoolean
   | NULL                     # tNull
+  | BQUOTE_STRING            # tBQuoteString
   | STRING                   # tString
   | number                   # tNumber
   | bignumber                # tBigInt

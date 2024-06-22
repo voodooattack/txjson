@@ -528,16 +528,16 @@ export namespace Schema {
         };
       }
       return (acc) => {
-        const deserializers = safeObjectFromEntries(
+        const deserializers = safeObjectFromEntries<ISchema["deserializers"]>(
           Object.entries(fields).map(([k, v]) => [
             k,
             acc.schema.deserializers[k] ?? v.deserializer
           ])
-        ) as Record<string, Deserializer>;
+        );
         return safeObjectFromEntries(
           (acc.typeName === ":object" ? acc : acc.children[0]).children.map(
             (kv) => {
-              return [kv.key!, deserializers[kv.key!](kv.children[0])];
+              return [kv.key!, deserializers[kv.key!]!(kv.children[0])];
             }
           )
         );
@@ -733,7 +733,7 @@ export namespace Schema {
           ]
       );
       return function (acc) {
-        const arr = acc.typeName === ":array" ? acc : acc.children?.[0];
+        const arr = acc.typeName === ":array" ? acc : acc.children[0];
         if (!arr || arr.typeName !== ":array") {
           return new ValueError(acc, "invalid array");
         }
@@ -882,7 +882,9 @@ export namespace Schema {
             `missing class ${JSON.stringify(className)}`
           );
         }
-        const e = acc.children.length ? args?.validator(acc.children[0]) : undefined;
+        const e = acc.children.length
+          ? args?.validator(acc.children[0])
+          : undefined;
         if (e) return e;
         const v = baseSchema.validators[className];
         return v?.(acc);
@@ -1073,12 +1075,12 @@ export function createSchemaOfSchema(
         }
       }
     },
-    prototypes: safeObjectFromEntries(
+    prototypes: safeObjectFromEntries<ISchema["prototypes"]>(
       Object.keys(baseSchema.prototypes).map((k) => [k, class Dummy {}])
-    ) as ISchema["prototypes"],
-    classes: safeObjectFromEntries(
+    ),
+    classes: safeObjectFromEntries<ISchema["classes"]>(
       Object.keys(baseSchema.classes).map((k) => [k, class Dummy {}])
-    ) as ISchema["classes"],
+    ),
     validators: Object.assign(
       Object.create(null),
       baseSchema.validators,
@@ -1090,7 +1092,7 @@ export function createSchemaOfSchema(
           })
       ),
       schemaValidators(baseSchema)
-    ),
+    ) as ISchema["validators"],
     deserializers: Object.assign(
       safeObjectFromEntries(
         Object.keys(baseSchema.deserializers)

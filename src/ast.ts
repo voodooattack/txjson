@@ -1,4 +1,5 @@
 import type {ErrorNode, ParserRuleContext} from "antlr4ng";
+import unescape from "unescape-js";
 import type {TxJSONListener} from "./parser/TxJSONListener";
 import type {
   ArrContext,
@@ -10,6 +11,7 @@ import type {
   PairContext,
   RootContext,
   TArrayContext,
+  TBQuoteStringContext,
   TBigIntContext,
   TBooleanContext,
   TCtorContext,
@@ -29,6 +31,11 @@ import {NodeKind} from "./schema";
 import {ValueError, getExpression} from "./util";
 
 const emptyValue = Symbol.for("TXJSON_EMPTY");
+
+function processStringLiteral(str: string) {
+  str = str.replace(/\\\n/g, ""); // remove line continuations
+  return unescape(str);
+}
 
 abstract class ASTNode implements ValueAccessor {
   _parent?: ValueAccessor;
@@ -509,13 +516,22 @@ export class TxListener implements TxJSONListener {
   }
 
   exitPair(ctx: PairContext) {
-    let text = ctx
-      .key()
-      .getText()
-      .replace(/^(['"])?(.*)\1$/, '"$2"')
-      .replace(/\\\r?\n/gm, "");
-    text = JSON.parse(text);
+    const text = ctx.key().STRING()
+      ? processStringLiteral(ctx.key().STRING()!.getText().slice(1, -1))
+      : ctx.key().getText();
+    console.log({ raw: ctx.key().getText(), text });
     this.endNode(ctx, new PairNode(ctx, this.schema, text));
+  }
+
+  enterTBQuoteString(_ctx: TBQuoteStringContext) {
+    this.beginNode();
+  }
+
+  exitTBQuoteString(ctx: TBQuoteStringContext) {
+    const text = processStringLiteral(
+      ctx.BQUOTE_STRING().getText().slice(1, -1).replace(/\\`/g, "`")
+    );
+    this.endNode(ctx, new PrimitiveNode(ctx, this.schema, ":string", text));
   }
 
   enterTString() {
@@ -523,19 +539,8 @@ export class TxListener implements TxJSONListener {
   }
 
   exitTString(ctx: TStringContext) {
-    let text = ctx
-      .STRING()
-      .getText()
-      .trim()
-      .slice(1, -1)
-      .replace(/\\\r?\n/g, "")
-      .replace(/\r\n/g, "\\r\\n")
-      .replace(/\n/g, "\\n");
-    text = `"${text}"`;
-    this.endNode(
-      ctx,
-      new PrimitiveNode(ctx, this.schema, ":string", JSON.parse(text))
-    );
+    const text = processStringLiteral(ctx.STRING().getText().slice(1, -1));
+    this.endNode(ctx, new PrimitiveNode(ctx, this.schema, ":string", text));
   }
 
   enterTBoolean() {

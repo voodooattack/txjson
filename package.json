@@ -1,6 +1,6 @@
 {
   "name": "txjson",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "An extension of JSON5 with rich inline type information.",
   "author": {
     "name": "Abdullah Ali",
@@ -48,12 +48,13 @@
     "prepare": "nr build",
     "build": "nr build:parser && nr build:ts",
     "build:parser": "antlr4ng -Dlanguage=TypeScript -Xexact-output-dir -o ./src/parser ./src/grammar/TxJSON.g4 ./src/grammar/Lexer.g4",
+    "watch:parser": "nr onchange src/grammar/*.g4 -- npm run build:parser",
     "build:ts": "nr build:ts:cjs && nr build:ts:esm && nr build:ts:dts",
     "build:ts:cjs": "tsc -p tsconfig.cjs.json",
     "build:ts:esm": "tsc -p tsconfig.esm.json",
     "build:ts:dts": "tsc -p tsconfig.dts.json",
     "clean": "rimraf dist src/parser",
-    "dev": "tsc -w",
+    "dev": "concurrently \"tsc -w --preserveWatchOutput\" \"nr watch:parser\"",
     "coverage": "nyc --reporter lcov ts-mocha -p tsconfig.tests.json ./tests/**/*.spec.ts",
     "test": "ts-mocha -p tsconfig.tests.json ./tests/**/*.spec.ts",
     "lint": "eslint src tests",
@@ -61,15 +62,18 @@
     "prepublishOnly": "nr build && nr test"
   },
   "dependencies": {
-    "antlr4ng": "^3.0.4"
+    "antlr4ng": "^3.0.4",
+    "unescape-js": "^1.1.4"
   },
   "devDependencies": {
     "@types/chai": "^4.3.16",
     "@types/mocha": "^10.0.6",
     "@types/node": "^20.14.2",
+    "@types/unescape-js": "^1.0.2",
     "antlr4ng-cli": "^2.0.0",
     "chai": "^4.3.7",
     "chai-bytes": "^0.1.2",
+    "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "eslint": "^9.4.0",
     "eslint-config-prettier": "^9.1.0",
@@ -80,6 +84,7 @@
     "eslint-plugin-simple-import-sort": "^12.1.0",
     "mocha": "^10.4.0",
     "nyc": "^15.1.0",
+    "onchange": "^7.1.0",
     "prettier": "^3.3.1",
     "source-map-support": "^0.5.21",
     "ts-mocha": "^10.0.0",
