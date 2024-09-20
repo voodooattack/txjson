@@ -4,6 +4,7 @@ import equalBytes from "chai-bytes";
 Error.stackTraceLimit = 1000;
 
 import {createSchema, parse} from "../src/index.ts";
+import type {TxJsonValue} from "../src/schema.ts";
 
 const { expect } = use(equalBytes);
 
@@ -19,7 +20,6 @@ describe("TxJSON parser", function (this: Mocha.Suite) {
     expect(parse('"a"')).to.equal("a");
     expect(parse("`a\nb\nc\n`")).to.equal("a\nb\nc\n");
     expect(parse("`a\nb\n`")).to.equal("a\nb\n");
-    console.log("aaaa", "`a'b'\\`c\\`\"d\"`");
     expect(parse("`a'b'\\`c\\`\"d\"`")).to.equal("a'b'`c`\"d\"");
     expect(parse("`a\nb`")).to.equal("a\nb");
     expect(parse('string "1"')).to.equal("1");
@@ -48,7 +48,7 @@ describe("TxJSON parser", function (this: Mocha.Suite) {
     );
   });
   it("can parse nested objects", function () {
-    const value = parse<Record<string, any>>(`{
+    const value = parse<Record<string, TxJsonValue>>(`{
       "str": "xyz \\"a\\\nb\\\nc\\"",
       'n': 1,
       bool: true,
@@ -74,18 +74,18 @@ describe("TxJSON parser", function (this: Mocha.Suite) {
     expect(value.bint2).to.equal(BigInt("1000000000000000000000000000000"));
     expect(value["\u1234z"]).to.equal("vvvv");
     expect(value.rx).to.be.instanceOf(RegExp);
-    expect(value.rx.source).to.equal("\\d+");
-    expect(value.rx.flags).to.equal("gi");
+    expect((value.rx as RegExp).source).to.equal("\\d+");
+    expect((value.rx as RegExp).flags).to.equal("gi");
   });
   it("can parse typed arrays", function () {
-    const value = parse(`Uint8Array([1, 2, 3])`);
+    const value = parse<Uint8Array>(`Uint8Array([1, 2, 3])`);
     expect(value).to.equalBytes([1, 2, 3]);
   });
   it("can parse custom prototype construction", function () {
     class Test {
       a!: number;
     }
-    const value = parse(
+    const value = parse<Test>(
       `Test... { a: 100 }`,
       createSchema({
         prototypes: { Test }
@@ -97,10 +97,11 @@ describe("TxJSON parser", function (this: Mocha.Suite) {
   it("can trigger deserialisers", function () {
     const ctx = createSchema({
       deserializers: {
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         Empty: (acc) => `Empty is ${acc.children[0].value}`
       }
     });
-    const value = parse(`Empty`, ctx);
+    const value = parse<string>(`Empty`, ctx);
     expect(value).to.equal(`Empty is undefined`);
   });
   it("can forward constructor calls", function () {
@@ -116,7 +117,7 @@ describe("TxJSON parser", function (this: Mocha.Suite) {
         this.values = values;
       }
     }
-    const [v1, v2, v3] = parse(
+    const [v1, v2, v3] = parse<[Test2, Test2, Test3]>(
       `[Test2(123, "aaa"), Test2(0), Test3('a', 'b', 'c')]`,
       createSchema({
         classes: { Test2, Test3 }
@@ -155,5 +156,139 @@ describe("TxJSON parser", function (this: Mocha.Suite) {
     expect(() => parse(`Uint8Array... {'0': 1}`)).to.throw(
       "(1,0): error in expression `Uint8Array... {'0': 1}`: unknown prototype \"Uint8Array\""
     );
+  });
+  it("can parse BigInts", function () {
+    expect(parse("bigint 1000000000000000000000000000000")).to.equal(
+      BigInt("1000000000000000000000000000000")
+    );
+    expect(parse("1000000000000000000000000000000n")).to.equal(
+      BigInt("1000000000000000000000000000000")
+    );
+  });
+  it("can parse regexes", function () {
+    const rx = parse<RegExp>(`/\\d+/g`);
+    expect(rx).to.be.instanceOf(RegExp);
+    expect(rx.source).to.equal("\\d+");
+    expect(rx.flags).to.equal("g");
+  });
+  it("can parse symbols", function () {
+    const sym = parse<symbol>("symbol 'a'", {
+      deserializers: {
+        symbol: (acc) => Symbol.for(acc.children[0].value as never)
+      }
+    });
+    expect(sym).to.equal(Symbol.for("a"));
+  });
+  it("can parse Maps", function () {
+    const m = parse<Map<string, number>>('Map([["a", 1], ["b", 2], ["c", 3]])');
+    expect(m).to.be.instanceOf(Map);
+    expect([...m.entries()]).to.deep.equal([
+      ["a", 1],
+      ["b", 2],
+      ["c", 3]
+    ]);
+  });
+  it("can parse Sets", function () {
+    const s = parse<Set<number>>("Set([1, 2, 3])");
+    expect(s).to.be.instanceOf(Set);
+    expect([...s.values()]).to.deep.equal([1, 2, 3]);
+  });
+  it("can parse Dates", function () {
+    const d = parse<Date>('Date("2021-01-01T00:00:00.000Z")');
+    expect(d).to.be.instanceOf(Date);
+    expect(d.getTime()).to.equal(Date.parse("2021-01-01T00:00:00.000Z"));
+  });
+  it("can parse Errors", function () {
+    const e = parse<Error>('Error("Test error")', {
+      classes: { Error }
+    });
+    expect(e).to.be.instanceOf(Error);
+    expect(e.message).to.equal("Test error");
+  });
+  it("can parse custom classes", function () {
+    class Test {
+      constructor(
+        public a: number,
+        public b: string
+      ) {}
+    }
+    const value = parse<Test>(
+      `Test(123, "abc")`,
+      createSchema({
+        classes: { Test }
+      })
+    );
+    expect(value).to.be.instanceOf(Test);
+    expect(value.a).to.equal(123);
+    expect(value.b).to.equal("abc");
+  });
+  it("can parse custom classes with deserialisers", function () {
+    class Test {
+      constructor(
+        public a: number | null | undefined,
+        public b: string | null | undefined
+      ) {}
+    }
+    const value = parse<Test>(
+      `Test(123, "abc")`,
+      createSchema({
+        classes: { Test },
+        deserializers: {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+          Test: (acc) => new Test(acc.children[0].value, acc.children[1].value)
+        }
+      })
+    );
+    expect(value).to.be.instanceOf(Test);
+    expect(value.a).to.equal(123);
+    expect(value.b).to.equal("abc");
+  });
+  it("can parse custom classes with deserialisers and properties", function () {
+    class Test {
+      constructor(
+        public a: number | null | undefined,
+        public b: string | null | undefined
+      ) {}
+    }
+    const value = parse<Test>(
+      `Test { a: 123, b: "abc" }`,
+      createSchema({
+        classes: { Test },
+        deserializers: {
+          Test: (acc) =>
+            /* eslint-disable-next-line @typescript-eslint/no-unsafe-argument,
+                                        @typescript-eslint/no-unsafe-member-access
+            */
+            new Test((acc.rawValue as any)?.a, (acc.rawValue as any)?.b)
+        }
+      })
+    );
+    expect(value).to.be.instanceOf(Test);
+    expect(value.a).to.equal(123);
+    expect(value.b).to.equal("abc");
+  });
+  it("can parse custom classes with deserialisers and properties and forward constructors", function () {
+    class Test {
+      constructor(
+        public a: number | null | undefined,
+        public b: string | null | undefined
+      ) {}
+    }
+    const value = parse<Test>(
+      `Test { a: 123, b: "abc" }`,
+      createSchema({
+        classes: { Test },
+        deserializers: {
+          Test: (acc) =>
+            /* eslint-disable-next-line @typescript-eslint/no-unsafe-argument,
+                                        @typescript-eslint/no-unsafe-member-access
+            */
+            new Test((acc.rawValue as any)?.a, (acc.rawValue as any)?.b)
+        }
+      })
+    );
+    expect(value).to.be.instanceOf(Test);
+    expect(value.a).to.equal(123);
+    expect(value.b).to.equal("abc");
   });
 });

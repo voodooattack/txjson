@@ -1,12 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import type {ErrorNode, ParserRuleContext} from "antlr4ng";
 import unescape from "unescape-js";
 import type {TxJSONListener} from "./parser/TxJSONListener";
 import type {
-  ArrContext,
-  BignumberContext,
-  CallContext,
-  KeyContext,
-  NumberContext,
   ObjContext,
   PairContext,
   RootContext,
@@ -17,16 +15,18 @@ import type {
   TCtorContext,
   TNullContext,
   TNumberContext,
-  TObjectContext,
   TProtoContext,
   TRegExpContext,
-  TStringContext,
   TUndefinedContext,
-  TValueContext,
   TxJSONParser,
+  TypedValueContext
+} from "./parser/TxJSONParser";
+import {
+  TStringContext,
+  TValueContext,
   ValueContext
 } from "./parser/TxJSONParser";
-import type {ActiveSchema, Schema, ValueAccessor} from "./schema";
+import type {ActiveSchema, Schema, TxJsonValue, ValueAccessor} from "./schema";
 import {NodeKind} from "./schema";
 import {ValueError, getExpression} from "./util";
 
@@ -39,12 +39,13 @@ function processStringLiteral(str: string) {
 
 abstract class ASTNode implements ValueAccessor {
   _parent?: ValueAccessor;
-  _value?: any = emptyValue;
+  _value: any = emptyValue;
   constructor(
     public rule: ParserRuleContext,
     public schema: ActiveSchema,
     private _typeName: string,
-    private _rawValue?: any
+    private _rawValue?: TxJsonValue,
+    private _text: string = rule.getText()
   ) {}
   get expression() {
     return getExpression(this);
@@ -96,6 +97,10 @@ abstract class ASTNode implements ValueAccessor {
   public get rawValue() {
     return this._rawValue;
   }
+  public get text() {
+    return this._text;
+  }
+
   public get hasValue() {
     return this._value !== emptyValue;
   }
@@ -174,14 +179,6 @@ class PrimitiveNode extends ASTNode {
   public get kind() {
     return NodeKind.Primitive;
   }
-  constructor(
-    rule: ParserRuleContext,
-    schema: ActiveSchema,
-    typeName: string,
-    rawValue: number | string | boolean | null | undefined | bigint | RegExp
-  ) {
-    super(rule, schema, typeName, rawValue);
-  }
   protected getValue() {
     return (
       (
@@ -227,7 +224,7 @@ class PairNode extends SimpleNode {
   }
   protected override getValue(): any {
     return this.child?.value;
-  }
+  } 
   get rawValue() {
     return this.child?.rawValue;
   }
@@ -253,12 +250,33 @@ class ObjectNode extends CompoundNode {
   }
 }
 
+function extractRuleValueText(rule: ParserRuleContext | null) {
+  if (rule === null) {
+    return;
+  }
+  if (rule instanceof ValueContext) {
+    return extractRuleValueText(rule.getChild(0) as ParserRuleContext);
+  }
+  if (rule instanceof TStringContext) {
+    return processStringLiteral(rule.getText().slice(1, -1));
+  }
+  if (rule instanceof TValueContext) {
+    return extractRuleValueText(rule.value());
+  } else {
+    return rule.getText();
+  }
+}
+
 class TypedValueNode extends SimpleNode {
   public get kind() {
     return NodeKind.Typed;
   }
-  constructor(rule: ParserRuleContext, schema: ActiveSchema, typeName: string) {
-    super(rule, schema, typeName);
+  constructor(
+    rule: TypedValueContext | TValueContext,
+    schema: ActiveSchema,
+    typeName: string
+  ) {
+    super(rule, schema, typeName, undefined, extractRuleValueText(rule));
   }
   get rawValue(): any {
     return this.child?.rawValue;
@@ -360,7 +378,11 @@ class CtorCallValueNode extends CompoundNode {
 }
 
 export class TxListener implements TxJSONListener {
-  visitTerminal = () => {};
+  visitTerminal = () => {
+    /**
+     * Do nothing
+     */
+  };
 
   public stack: ASTNode[][] = [[]];
   public schema: ActiveSchema;
@@ -389,25 +411,16 @@ export class TxListener implements TxJSONListener {
     );
     this.schema.parser = parser;
   }
-  enterKey?: ((ctx: KeyContext) => void) | undefined;
-  exitKey?: ((ctx: KeyContext) => void) | undefined;
-  enterTObject?: ((ctx: TObjectContext) => void) | undefined;
-  exitTObject?: ((ctx: TObjectContext) => void) | undefined;
-  enterTRegExp?: ((ctx: TRegExpContext) => void) | undefined;
-  enterValue?: ((ctx: ValueContext) => void) | undefined;
-  exitValue?: ((ctx: ValueContext) => void) | undefined;
-  enterCall?: ((ctx: CallContext) => void) | undefined;
-  exitCall?: ((ctx: CallContext) => void) | undefined;
-  enterArr?: ((ctx: ArrContext) => void) | undefined;
-  exitArr?: ((ctx: ArrContext) => void) | undefined;
-  enterNumber?: ((ctx: NumberContext) => void) | undefined;
-  exitNumber?: ((ctx: NumberContext) => void) | undefined;
-  enterBignumber?: ((ctx: BignumberContext) => void) | undefined;
-  exitBignumber?: ((ctx: BignumberContext) => void) | undefined;
 
-  visitErrorNode(node: ErrorNode): void {}
-  enterEveryRule(node: ParserRuleContext): void {}
-  exitEveryRule(node: ParserRuleContext): void {}
+  visitErrorNode(_node: ErrorNode): void {
+    /** do nothing */
+  }
+  enterEveryRule(_node: ParserRuleContext): void {
+    /** do nothing */
+  }
+  exitEveryRule(_node: ParserRuleContext): void {
+    /** do nothing */
+  }
 
   get nodes() {
     return this.stack[this.stack.length - 1];
@@ -441,7 +454,7 @@ export class TxListener implements TxJSONListener {
     return this.addNode(ctx, node);
   }
 
-  addNode(ctx: ParserRuleContext, node: ASTNode) {
+  addNode(_ctx: ParserRuleContext, node: ASTNode) {
     node.children.forEach((n) => (n.parent = node));
     this.nodes.push(node);
     return node;

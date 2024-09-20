@@ -16,28 +16,6 @@ pair: key Colon value;
 
 key: STRING | IDENTIFIER | TRUE | FALSE | UNDEFINED | NULL | NUMERIC_LITERAL;
 
-typedValue
-  : IDENTIFIER value?     # tValue
-  | IDENTIFIER Spread obj # tProto
-  | IDENTIFIER call       # tCtor
-;
-
-basicValue
-  : UNDEFINED                # tUndefined
-  | TRUE                     # tBoolean
-  | FALSE                    # tBoolean
-  | NULL                     # tNull
-  | BQUOTE_STRING            # tBQuoteString
-  | STRING                   # tString
-  | number                   # tNumber
-  | bignumber                # tBigInt
-  | obj                      # tObject
-  | arr                      # tArray
-  | RegularExpressionLiteral # tRegExp
-;
-
-value: basicValue | typedValue;
-
 call: OpenParen value (Comma value)* Comma? CloseParen | OpenParen CloseParen;
 
 arr
@@ -48,3 +26,25 @@ arr
 number: SIGN? (NUMERIC_LITERAL | NUMBER);
 
 bignumber: SIGN? BINT;
+
+typedValue
+  : IDENTIFIER value?     # tValue
+  | IDENTIFIER Spread obj # tProto
+  | IDENTIFIER call       # tCtor
+;
+
+value: basicValue | typedValue;
+
+basicValue
+  : UNDEFINED                # tUndefined
+  | TRUE                     # tBoolean
+  | FALSE                    # tBoolean
+  | NULL                     # tNull
+  | BQUOTE_STRING            # tBQuoteString
+  | STRING                   # tString
+  | bignumber                # tBigInt
+  | number                   # tNumber
+  | obj                      # tObject
+  | arr                      # tArray
+  | RegularExpressionLiteral # tRegExp
+;

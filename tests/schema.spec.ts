@@ -15,6 +15,7 @@ describe("TxJSON schema", function (this: Mocha.Suite) {
       Object.assign(this, { extra });
     }
   }
+  // eslint-disable-next-line @typescript-eslint/no-extraneous-class
   class Dummy {}
   const schemaStr = `schema {
     X: maybe oneOf [bigint, number],
@@ -49,7 +50,7 @@ describe("TxJSON schema", function (this: Mocha.Suite) {
   });
   it("can parse schema", function () {
     const schema = parseSchema(schemaStr, subSchema);
-    const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13] = parse(
+    const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13] = parse<unknown[]>(
       `[
         X bigint "123",
         X null,
@@ -252,6 +253,7 @@ describe("TxJSON schema", function (this: Mocha.Suite) {
     expect(() =>
       parseSchema(`schema []`, undefined, "test.schema.txjson")
     ).to.throw(
+      // eslint-disable-next-line max-len
       "test.schema.txjson(1,0): error in expression `schema []`: invalid schema: expected an object with a signature of `schema { [typeName]: type, ... }`"
     );
     expect(() => parseSchema(`{}`, undefined)).to.throw(
@@ -429,15 +431,18 @@ describe("TxJSON schema", function (this: Mocha.Suite) {
           NULL: () => `NULL`,
           TYPEID: () => `TYPEID`,
           STRING: () => `STRING`,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           STRUCT: (acc) => ({ STRUCT: acc.children[0].value }),
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           VARIANT: (acc) => ({ VARIANT: acc.children[0].value }),
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           INTERVAL: (acc) => ({ INTERVAL: acc.children[0].value }),
           INT: (acc) => ({ INT: acc.rawValue }),
           ValueError: () => `ValueError`
         }
       })
     );
-    const res = parse(
+    const res = parse<object>(
       `[
       {
         "description": "Math",
@@ -476,7 +481,8 @@ describe("TxJSON schema", function (this: Mocha.Suite) {
             { VARIANT: { INTERVAL: "P1M15D" } }
           ]
         ]
-      }, {
+      },
+      {
         description: "Math 2",
         mode: "spreadsheet",
         query: [],
@@ -577,14 +583,13 @@ describe("TxJSON schema", function (this: Mocha.Suite) {
             deserializers: {
               variant: (acc) =>
                 `variant ${JSON.stringify(acc.children[0].value)}`,
+              // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
               c: (acc) => `${acc.children[0].value}`,
               X: () => "X"
             },
             classes: {
               Y: class Y {
-                get [Symbol.toStringTag]() {
-                  return "Y";
-                }
+                readonly [Symbol.toStringTag] = "Y";
               }
             }
           })
@@ -597,5 +602,113 @@ describe("TxJSON schema", function (this: Mocha.Suite) {
       "variant {}",
       'variant ["X","X",{"o":"X","p":12,"q":12.2}]'
     ]);
+  });
+  it("misc 3", function () {
+    expect(() =>
+      parse(
+        `X [Y 0, Z 0]`,
+        parseSchema(
+          `schema {
+            X: arrayOf oneOf [Y, Z],
+            Y: int,
+            Z: int
+          }`,
+          createSchema({
+            deserializers: {
+              Y: () => "Y",
+              Z: () => "Z"
+            }
+          })
+        )
+      )
+    ).to.not.throw();
+    expect(() =>
+      parse(
+        `X [Y 0, Z 0]`,
+        parseSchema(
+          `schema {
+            X: arrayOf oneOf [Y, Z],
+            Y: int,
+            Z: int
+          }`,
+          createSchema({
+            deserializers: {
+              Y: () => "Y"
+            }
+          })
+        )
+      )
+    ).to.not.throw();
+    expect(() =>
+      parse(
+        `X [Y 0, Z 0]`,
+        parseSchema(
+          `schema {
+            X: arrayOf oneOf [Y, Z],
+            Y: int,
+            Z: int
+          }`,
+          createSchema({
+            deserializers: {
+              Z: () => "Z"
+            }
+          })
+        )
+      )
+    ).to.not.throw();
+  });
+  it("misc 4", function () {
+    expect(() =>
+      parse(
+        `X [Y 0, Z 0]`,
+        parseSchema(
+          `schema {
+            X: arrayOf oneOf [Y, Z],
+            Y: int,
+            Z: int
+          }`,
+          createSchema({
+            deserializers: {
+              Y: () => "Y",
+              Z: () => "Z"
+            }
+          })
+        )
+      )
+    ).to.not.throw();
+    expect(() =>
+      parse(
+        `X [Y 0, Z 0]`,
+        parseSchema(
+          `schema {
+            X: arrayOf oneOf [Y, Z],
+            Y: int,
+            Z: int
+          }`,
+          createSchema({
+            deserializers: {
+              Y: () => "Y"
+            }
+          })
+        )
+      )
+    ).to.not.throw();
+    expect(() =>
+      parse(
+        `X [Y 0, Z 0]`,
+        parseSchema(
+          `schema {
+            X: arrayOf oneOf [Y, Z],
+            Y: int,
+            Z: int
+          }`,
+          createSchema({
+            deserializers: {
+              Z: () => "Z"
+            }
+          })
+        )
+      )
+    ).to.not.throw();
   });
 });

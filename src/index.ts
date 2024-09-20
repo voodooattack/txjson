@@ -40,12 +40,24 @@ export function parse<T = any>(
       throw new Error(
         `syntax error at ${
           schema.meta?.fileName ? schema.meta.fileName + ":" : ""
-        }${line}:${charPositionInLine}, ${msg}`
+        }${String(line)}:${String(charPositionInLine)}, ${msg}`
       );
     },
-    reportAmbiguity: () => {},
-    reportContextSensitivity: () => {},
-    reportAttemptingFullContext: () => {}
+    reportAmbiguity: () => {
+      /**
+       * Do nothing
+       */
+    },
+    reportContextSensitivity: () => {
+      /**
+       * Do nothing
+       */
+    },
+    reportAttemptingFullContext: () => {
+      /**
+       * Do nothing
+       */
+    }
   });
   walker.walk(listener, parser.root());
   activeSchema.meta.root = listener.root;

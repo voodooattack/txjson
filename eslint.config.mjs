@@ -108,7 +108,11 @@ const myConfig = {
 
 export default tseslint.config(
   {
-    files: ["**/*.ts"],
+    files: [
+      "src/*.ts",
+      "tests/*.ts"
+    ],
+    ignores: ["src/parser/*.ts"],
     extends: [
       eslint.configs.recommended,
       ...tseslint.configs.strictTypeChecked,
@@ -119,34 +123,4 @@ export default tseslint.config(
       reportUnusedDisableDirectives: true,
     },
   },
-  {
-    files: ["./src/parser/*.ts"],
-    extends: [
-      eslint.configs.recommended,
-      ...tseslint.configs.strictTypeChecked,
-      ...tseslint.configs.stylisticTypeChecked,
-      myConfig,
-    ],
-    linterOptions: {
-      reportUnusedDisableDirectives: true,
-    },
-    rules: {
-      indent: ["warn", 2],
-      "no-tabs": 0,
-      "no-empty": 0,
-      "no-mixed-spaces-and-tabs": 0,
-      "@typescript-eslint/no-unused-vars": "off",
-      eqeqeq: 0,
-      "unused-imports/no-unused-imports": "warn",
-      "unused-imports/no-unused-vars": [
-        "warn",
-        {
-          vars: "all",
-          varsIgnorePattern: "^_",
-          args: "after-used",
-          argsIgnorePattern: "^_",
-        },
-      ],
-    },
-  }
 );
