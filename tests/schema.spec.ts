@@ -50,7 +50,9 @@ describe("TxJSON schema", function (this: Mocha.Suite) {
   });
   it("can parse schema", function () {
     const schema = parseSchema(schemaStr, subSchema);
-    const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13] = parse<unknown[]>(
+    const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13] = parse<
+      unknown[]
+    >(
       `[
         X bigint "123",
         X null,
@@ -217,6 +219,47 @@ describe("TxJSON schema", function (this: Mocha.Suite) {
     expect(() => parse(`{}`, schema)).to.throw(
       "expected array of type `Place[]`"
     );
+    expect(() =>
+      parse(
+        `[{
+           id: "1",
+           cat: "parks_and_recreation",
+           status: "published",
+           tags: [],
+        }]`,
+        schema
+      )
+    ).to.throw(
+      'in field "name": (1,1): missing field "name" of type: string'
+    );
+    expect(() =>
+      parse(
+        `[{
+           id: "1",
+           name: "The good place",
+           cat: "parks_and_recreation",
+           status: "invalid",
+           tags: [],
+        }]`,
+        schema
+      )
+    ).to.throw(
+      'expected: `string("published")|string("private")|string("hidden")`'
+    );
+    expect(() =>
+      parse(
+        `[{
+           id: "1",
+           name: "The good place",
+           cat: "parks_and_recreation",
+           status: "published",
+           tags: "a",
+        }]`,
+        schema
+      )
+    ).to.throw(
+      'in field "tags": (6,17): expected array of type `string[]`'
+    );
     expect(
       parse(
         `[{
@@ -228,6 +271,12 @@ describe("TxJSON schema", function (this: Mocha.Suite) {
            coords: Point(10, 10),
            address: "123 Afterlife St.",
            tags: ["great amenities", "free wifi"],
+        }, {
+           id: "1",
+           name: "The good place",
+           cat: "parks_and_recreation",
+           status: "private",
+           tags: [],
         }]`,
         schema
       )
@@ -245,6 +294,14 @@ describe("TxJSON schema", function (this: Mocha.Suite) {
         },
         address: "123 Afterlife St.",
         tags: ["great amenities", "free wifi"]
+      },
+      {
+        PLACE_DESERIALIZED: true,
+        id: "1",
+        name: "The good place",
+        cat: "parks_and_recreation",
+        status: "private",
+        tags: []
       }
     ]);
   });

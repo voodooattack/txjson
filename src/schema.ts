@@ -664,7 +664,7 @@ export namespace Schema {
         if (typeof rawValue !== "object") {
           return new ValueError(
             acc,
-            `expected object, found ${JSON.stringify(acc.rawValue)}`
+            `expected object, found ${JSON.stringify(acc.rawValue, null, 2)}`
           );
         }
         if (rawValue === null) {
@@ -680,7 +680,7 @@ export namespace Schema {
             if (!optional) {
               errors[k] = new ValueError(
                 acc,
-                `missing field ${JSON.stringify(k)} of type: ${String(optional)}`,
+                `missing field ${JSON.stringify(k)} of type: ${fields[k].signature}`,
                 true
               );
             }
@@ -706,10 +706,10 @@ export namespace Schema {
         if (Object.keys(errors).length) {
           return new ValueError(
             acc,
-            `expected object with signature \`${indent(
+            `expected object with signature \`${signature.length > 30 ? `${indent(
               signature,
               1
-            )}\`\nvalidation failed with errors:\n  ${Object.entries(errors)
+            )}\n\`` : `${signature}\`,`}\ but validation failed with errors:\n  ${Object.entries(errors)
               .map(
                 ([k, e]) =>
                   `* in field ${JSON.stringify(k)}: ${indent(e.message, 3)}`
@@ -796,7 +796,7 @@ export namespace Schema {
               return;
             }
             if (e instanceof ValueError) e.simplified = true;
-            errors[sig] = errors[sig] ?? [];
+            errors[sig] ??= [];
             errors[sig].push(e);
           } catch (e) {
             /* do nothing */
@@ -807,7 +807,7 @@ export namespace Schema {
           `expected: \`${indent(
             signature,
             1
-          )}\`, validation failed with errors:\n${Object.entries(errors)
+          )}\`, but validation failed with errors:\n${Object.entries(errors)
             .flatMap(([k, errs]) =>
               errs.map((e) => {
                 return `  * alternative \`${indent(
@@ -886,10 +886,10 @@ export namespace Schema {
         }
         return new ValueError(
           acc,
-          `expected ${label} with signature \`${indent(
+          `expected ${label} with signature \`${signature.length > 30 ? `${indent(
             signature,
             1
-          )}\`\nvalidation failed with errors:\n  ${Object.entries(errors)
+          )}\n\`` : `${signature}\`,`} but validation failed with errors:\n  ${Object.entries(errors)
             .map(([k, e]) => `* at index ${k}: ${indent(e.message, 2)}`)
             .join("\n  ")}`
         );
