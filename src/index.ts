@@ -14,7 +14,7 @@ export function parseSchema(
   return parse(document, createSchemaOfSchema(baseSchema), schemaFileName);
 }
 
-export function parse<T = any>(
+export function parse<T = unknown>(
   document: string,
   schema: Partial<ISchema> = defaultSchema,
   fileName?: string
@@ -64,12 +64,12 @@ export function parse<T = any>(
   return listener.root.value;
 }
 
+export type {
+  ActiveSchema, Deserializer,
+  RawAccessor, Validator, ValueAccessor
+} from "./schema";
+
 export {
-  ActiveSchema,
-  Deserializer,
-  RawAccessor,
   Schema,
-  Validator,
-  ValueAccessor,
   createSchema
 } from "./schema";

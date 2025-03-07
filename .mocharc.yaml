@@ -1,6 +1,6 @@
 require:
   - 'source-map-support/register'
-  - 'ts-node/register'
+  - 'tsx'
 spec:
   - 'tests/**/*.spec.ts'
 package: './package.json'
